@@ -224,6 +224,60 @@ def vowel_variability(in_file_path, target_vowels_IPA, register, feature_column_
 
 
 def separability(in_file_path, target_vowels_IPA, register, feature_column_names, out_file_path, parentgender=None):
+    """
+    Computes the separability of different IPA categories based on feature values using MANOVA.
+
+    This function reads a dataset, filters it according to specified criteria, performs MANOVA
+    for each unique combination of IPA categories, and calculates the average Pillai's trace score 
+    for each 'spkid' and 'AgeMonth' group. The results are saved to an Excel file.
+
+    Parameters:
+    -----------
+    in_file_path : str
+        Path to the input CSV file containing the data. The file should have columns for features,
+        IPA categories, and optional demographic information.
+        
+    target_vowels_IPA : list of str
+        List of IPA categories to include in the analysis. For example: ['a', 'e', 'i', 'o', 'u', 'æ'].
+
+    register : str
+        A string that specifies the register or other category of interest in the analysis.
+
+    feature_column_names : list of str
+        List of column names in the CSV file representing the feature values to be used in the MANOVA test.
+        For example: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'].
+
+    out_file_path : str
+        Path where the results Excel file will be saved. The file will be saved with an added suffix
+        if `parentgender` is provided.
+
+    parentgender : str, optional
+        If specified, filters the data to include only rows where the 'Parent' column matches this value.
+        Default is None, which means no filtering based on 'Parent' is applied.
+
+    Returns:
+    --------
+    None
+        The function saves the results as an Excel file at the specified `out_file_path`.
+
+    Notes:
+    ------
+    - The function generates all unique pairs of IPA categories and performs MANOVA for each pair.
+    - If the MANOVA test fails for a specific pair, it logs an error message and assigns NaN to that pair's score.
+    - The average Pillai's trace score is computed only if there are valid scores for the pairs. 
+    - The results include 'spkid', 'AgeMonth', 'Register', 'separability' (average Pillai's trace), and 'Nopairs' (number of valid pairs).
+
+    Examples:
+    ---------
+    separability(
+        in_file_path='data.csv',
+        target_vowels_IPA=['a', 'e', 'i', 'o', 'u', 'æ'],
+        register='test_register',
+        feature_column_names=['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'],
+        out_file_path='results.xlsx',
+        parentgender='male'
+    )
+    """
     # Load data
     df = pd.read_csv(in_file_path)
     
