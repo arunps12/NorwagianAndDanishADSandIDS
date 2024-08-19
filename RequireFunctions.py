@@ -4,6 +4,12 @@ import pandas as pd
 from sklearn.decomposition import PCA
 from scipy.spatial import ConvexHull
 from scipy.spatial.distance import cdist
+from sklearn.preprocessing import StandardScaler
+from statsmodels.multivariate.manova import MANOVA
+from itertools import combinations
+
+import warnings
+warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 def vowel_space_expansion(in_file_path, target_vowels_IPA, register, feature_column_names, out_file_path, parentgender=None):
     """
@@ -107,11 +113,6 @@ def vowel_space_expansion(in_file_path, target_vowels_IPA, register, feature_col
     
     print("Convex hull areas have been saved")
 
-import os
-import numpy as np
-import pandas as pd
-from sklearn.decomposition import PCA
-from scipy.spatial import ConvexHull
 
 def vowel_variability(in_file_path, target_vowels_IPA, register, feature_column_names, out_file_path, parentgender=None):
     """
@@ -220,4 +221,83 @@ def vowel_variability(in_file_path, target_vowels_IPA, register, feature_column_
     
     print("Variabilities have been saved")
 
- 
+
+
+def separability(in_file_path, target_vowels_IPA, register, feature_column_names, out_file_path, parentgender=None):
+    # Load data
+    df = pd.read_csv(in_file_path)
+    
+    # Filter data based on the parentgender and target_vowels_IPA
+    if parentgender is not None:
+        df = df[df['Parent'] == parentgender].copy()
+    df = df[df['IPA'].isin(target_vowels_IPA)].copy()
+    df.reset_index(drop=True, inplace=True)
+
+    # Generate all unique pairs of IPA categories
+    ipa_pairs = list(combinations(target_vowels_IPA, 2))
+    #total_pairs = len(ipa_pairs)
+    
+    results = []
+
+    # Group by 'spkid' and 'AgeMonth' to compute the Pillai score using MANOVA test
+    for (spkid, age), group in df.groupby(['spkid', 'AgeMonth']):
+        #print(spkid, age)
+        feature_values = group[feature_column_names].values
+        #print(feature_values.shape)
+        
+        if len(group) < 2:
+            continue
+        
+        # Standardizing the feature data
+        #scaler = StandardScaler()
+        #scaled_features = scaler.fit_transform(feature_values)
+        
+        # Prepare the data for MANOVA
+        df_scaled = pd.DataFrame(feature_values, columns=feature_column_names)
+        df_scaled['IPA'] = group['IPA'].values
+
+        # Compute Pillai score for each pair
+        all_pillai_scores = []
+        for ipa1, ipa2 in ipa_pairs:
+            try:
+                subset = df_scaled[df_scaled['IPA'].isin([ipa1, ipa2])]
+                
+                if subset.shape[0] < 2:
+                    continue  # Skip if there are not enough samples for the pair
+                
+                formula = f"{'+'.join(feature_column_names)} ~ C(IPA)"
+                #formula = f"{' + '.join([f'`{col}`' for col in feature_column_names])} ~ C(IPA)"
+                manova = MANOVA.from_formula(formula, data=subset)
+                pillai_score = manova.mv_test().results['C(IPA)']['stat']['Value']['Pillai\'s trace']
+                p_value = manova.mv_test().results['C(IPA)']['stat']['Pr > F']['Pillai\'s trace']
+                if p_value < 0.05:
+                    all_pillai_scores.append(pillai_score)
+                else:
+                    all_pillai_scores.append(np.nan)
+            except Exception as e:
+                print(f"MANOVA failed for spkid={spkid} at AgeMonth={age} for pair ({ipa1}, {ipa2}): {e}")
+                all_pillai_scores.append(np.nan)
+
+        # Compute the average Pillai score
+        if all_pillai_scores:
+            array = np.array(all_pillai_scores)
+            no_pairs = np.sum(~np.isnan(array))
+            average_pillai_score = np.nanmean(all_pillai_scores)
+            results.append({'spkid': spkid, 'AgeMonth': age, 'Register': register, 'separability': average_pillai_score, 'Nopairs': no_pairs})
+
+        else:
+            average_pillai_score = np.nan  # Handle the case where no pairs were found
+            results.append({'spkid': spkid, 'AgeMonth': age, 'Register': register, 'separability': average_pillai_score, 'Nopairs': np.nan})
+
+    # Create results DataFrame
+    # Convert results to DataFrame and save to Excel
+    results_df = pd.DataFrame(results)
+    results_df.dropna(inplace=True)
+    
+    if parentgender:
+        results_df.to_excel(out_file_path + '_' + parentgender + '.xlsx', index=False)
+    else:
+        results_df.to_excel(out_file_path + '.xlsx', index=False)
+    
+    print("Pillai scores have been saved")
+
