@@ -85,7 +85,7 @@ def delete_audio_from_dir(filename):
     if os.path.exists(filepath):
         os.remove(filepath)
 
-# Function to extact mfcc features for each extracted (split) audio segement
+
 def mfcc(df, wav_dir):
     """
     Extracts MFCC features from audio segments and stores them in a DataFrame.
@@ -127,20 +127,34 @@ def mfcc(df, wav_dir):
     - If an error occurs while processing a segment, it is caught, the segment is deleted, 
       and the function proceeds to the next segment.
     """
+
+    # Define the MFCC column names
+    mfcc_columns = [f'mfcc{i+1}' for i in range(13)]
+
+    # Ensure the DataFrame has the correct columns for MFCC features
+    for col in mfcc_columns:
+        if col not in df.columns:
+            df[col] = np.nan
+
     for ind, row in df.iterrows():
-        audio_path = os.path.join(wav_dir, row['file_name'] + '.wav') #  audio file path
+        audio_path = os.path.join(wav_dir, row['file_name'] + '.wav')  # Audio file path
         try:
-            sound = audio_split_(row['time_start'], row['time_end'], audio_path, audio_dir)
-            y, sr = librosa.load(os.path.join(audio_dir, 'seg.wav'), sr=16000)
+            sound = audio_split_(row['time_start'], row['time_end'], audio_path, wav_dir)
+            y, sr = librosa.load(os.path.join(wav_dir, 'seg.wav'), sr=16000)
+            
             # Extract MFCC features
-            mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, n_fft = 400, hop_length=160, win_length = 400)
-            #mfccs_normalized = librosa.util.normalize(mfccs)
-            #mean along the time axis (axis 1)
+            mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, n_fft=400, hop_length=160, win_length=400)
+            # Mean along the time axis (axis 1)
             mfccs_mean = np.mean(mfccs, axis=1)
+            
+            # Assign values to the correct columns
             for i in range(len(mfccs_mean)):
-                df.loc[ind, i+1] = mfccs_mean[i]
+                df.loc[ind, mfcc_columns[i]] = mfccs_mean[i]
+            
+            # Delete the temporary audio segment
             delete_audio_from_dir('seg.wav')
         except Exception as e:
+            # Ensure the temporary audio segment is deleted in case of error
             delete_audio_from_dir('seg.wav')
             print(f'Error at index {ind}: {e}')
             continue
