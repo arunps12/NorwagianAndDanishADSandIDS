@@ -5,6 +5,10 @@ import pandas as pd
 from pydub import AudioSegment
 import librosa
 
+import statistics
+import parselmouth
+from parselmouth.praat import call
+
 # Set the directory path to save spit audio segment
 audio_dir = r'C:\Users\arunps\OneDrive\Projects\Scripts\Python\Research Stay\audio_seg'
 
@@ -85,8 +89,39 @@ def delete_audio_from_dir(filename):
     if os.path.exists(filepath):
         os.remove(filepath)
 
+def extract_formants_mean_glottal_pulse(wave_file, f0min, f0max, no_formants, f_ceiling):
+    # Load the sound and extract pitch and point process
+    sound = parselmouth.Sound(wave_file)
+    pitch = call(sound, "To Pitch (cc)", 0, f0min, 15, 'no', 0.03, 0.45, 0.01, 0.35, 0.14, f0max)
+    point_process = call(sound, "To PointProcess (periodic, cc)", f0min, f0max)
+    
+    # Extract formants
+    formants = call(sound, "To Formant (burg)", 0.0025, no_formants, f_ceiling, 0.005, 50)
+    num_points = call(point_process, "Get number of points")
+    
+    # Initialize formant lists
+    formant_lists = [[] for _ in range(4)]
+    
+    # Measure formants at glottal pulses
+    for i in range(1, num_points + 1):
+        t = call(point_process, "Get time from index", i)
+        for j in range(4):
+            formant_value = call(formants, "Get value at time", j + 1, t, 'Hertz', 'Linear')
+            if not np.isnan(formant_value):
+                formant_lists[j].append(formant_value)
+    
+    # Calculate mean formants across pulses
+    mean_formants = []
+    for formant_list in formant_lists:
+        if formant_list:
+            mean_formants.append(statistics.mean(formant_list))
+        else:
+            mean_formants.append(None)
+    
+    # Return the mean values of F1, F2, F3, and F4
+    return mean_formants
 
-def mfcc(df, wav_dir):
+def extract_mfcc(df, wav_dir):
     """
     Extracts MFCC features from audio segments and stores them in a DataFrame.
 
@@ -135,6 +170,7 @@ def mfcc(df, wav_dir):
     for col in mfcc_columns:
         if col not in df.columns:
             df[col] = np.nan
+        df[col] = np.nan
 
     for ind, row in df.iterrows():
         audio_path = os.path.join(wav_dir, row['file_name'] + '.wav')  # Audio file path
