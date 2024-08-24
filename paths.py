@@ -76,7 +76,7 @@ out_path_mfcc_da_ADS_ML = os.path.join(out_dir_ML, 'mfcc_da_ADS')
 out_path_mfcc_da_IDS_ML = os.path.join(out_dir_ML, 'mfcc_da_IDS')
 
 # Computed vowel-based measures ouput dirs
-out_base_dir = os.path.join(basedir, 'ComputedMeasures')
+out_base_dir = os.path.join(basedir, 'VowelBasedMeasures')
 create_dir(out_base_dir)
 
 #Measures out dir
