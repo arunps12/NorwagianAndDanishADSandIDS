@@ -5,9 +5,9 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 
 # WaveFiles directory
 # Norwagian wave dir
-#no_wav_dir = path/to/norwagian wavdir 'Uncomment it and give the path of your wav file dir'
+no_wav_dir = r'\\hypatia.uio.no\lh-hf-iln-sociocognitivelab\Research\BabyLearn\Working_dir\wav_files_organized'#path/to/norwagian wavdir 'Uncomment it and give the path of your wav file dir'
 # Danish wav dir
-#da_wav_dir = path/to/danish wavdir 'Uncomment it and give the path of your if other language wav file dir'
+da_wav_dir = r'C:\Users\arunps\OneDrive\Projects\Danish IDS\PraatTextGridsAudio' #path/to/danish wavdir 'Uncomment it and give the path of your if other language wav file dir'
 
 #Metadata directory
 meta_dir = os.path.join(basedir, 'Metadata')
@@ -88,6 +88,17 @@ create_dir(variability)
 
 separability = os.path.join(out_base_dir, 'Separability')
 create_dir(separability)
+
+generalisability = os.path.join(out_base_dir, 'Generalisability')
+create_dir(generalisability)
+
+#xgboost generalisability
+xgboost_ = os.path.join(generalisability, 'xgboost')
+create_dir(xgboost_)
+
+#CNN generalisability
+CNN_ = os.path.join(generalisability, 'CNN')
+create_dir(CNN_)
 
 
 
