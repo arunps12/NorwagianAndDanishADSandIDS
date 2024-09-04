@@ -206,6 +206,9 @@ def vowel_variability(in_dir_path, feature_name, feature_column_names, out_dir_p
         results = []
         for (spkid, age, vowel), group in df.groupby(['spkid', 'AgeMonth', 'IPA']):
             feature_values = group[feature_column_names].values
+            if len(feature_values) < 3:
+                print(f"Skipping speaker {spkid}, age {age} due to less than 3 samples.")
+                continue
             mean_feature_values = np.mean(feature_values, axis=0).reshape(1, -1) # mean of each feature
             eq_dist = cdist(feature_values, mean_feature_values, metric='euclidean').flatten()
             sum_eq_dist = np.sum(eq_dist) # Sum the distances
