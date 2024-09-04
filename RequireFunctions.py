@@ -102,8 +102,8 @@ def vowel_space_expansion(in_dir_path, feature_name, feature_column_names, out_d
                     feature_values = pca.fit_transform(feature_values)
                     area = ConvexHull(feature_values).volume
                     results.append({'spkid': spkid, 'AgeMonth': age, 'ConvexHullArea': round(area)})
-            except:
-                print(f'Not enough samples for speaker {spkid}, age {age} to create Convexhull')
+            except Exception as e:
+                print(f"Error during Creating ConvexHull for speaker {spkid}, age {age}: {e}")
                 continue
                 #results.append({'spkid': spkid, 'AgeMonth': age, 'ConvexHullArea': np.nan})
     
