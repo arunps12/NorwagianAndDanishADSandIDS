@@ -78,6 +78,7 @@ def vowel_space_expansion(in_dir_path, feature_name, feature_column_names, out_d
         df = pd.read_csv(os.path.join(in_dir_path, file))
         #df = df[df['IPA'].isin(target_vowels_IPA)].copy()
         #df.reset_index(inplace=True)
+        
     
         # Group by 'spkid', 'AgeMonth', and 'IPA' to compute the mean feature values for each vowel
         mean_features = df.groupby(['spkid', 'AgeMonth', 'IPA'])[feature_column_names].mean().reset_index()
@@ -85,17 +86,26 @@ def vowel_space_expansion(in_dir_path, feature_name, feature_column_names, out_d
         # Group by 'spkid' and 'AgeMonth' to compute the convex hull area
         results = []
         for (spkid, age), group in mean_features.groupby(['spkid', 'AgeMonth']):
-            feature_values = group[feature_column_names].values
-            if feature_values.shape[0] > feature_values.shape[1]:  # Check if there are at least 3 points
-                area = ConvexHull(feature_values).volume
-                results.append({'spkid': spkid, 'AgeMonth': age, 'ConvexHullArea': round(area)})
-            elif feature_values.shape[0] <= feature_values.shape[1] and feature_values.shape[1] > 2 and feature_values.shape[0] > 2:
-                pca = PCA(n_components=feature_values.shape[0]-1)
-                feature_values = pca.fit_transform(feature_values)
-                area = ConvexHull(feature_values).volume
-                results.append({'spkid': spkid, 'AgeMonth': age, 'ConvexHullArea': round(area)})
-            else:
-                results.append({'spkid': spkid, 'AgeMonth': age, 'ConvexHullArea': np.nan})
+            try:
+                if group['IPA'].nunique() != int(file.split('.csv')[0].split('_')[3]):
+                    print(f"Skipping speaker {spkid}, age {age} due to missing classes.")
+                    continue
+                feature_values = group[feature_column_names].values
+            #if feature_values.shape[0] > feature_values.shape[1]:  # Check if there are at least 3 points
+                if feature_values.shape[1] == 2:
+                    area = ConvexHull(feature_values).volume
+                    results.append({'spkid': spkid, 'AgeMonth': age, 'ConvexHullArea': round(area)})
+            #elif feature_values.shape[0] <= feature_values.shape[1] and feature_values.shape[1] > 2 and feature_values.shape[0] > 2:
+                elif feature_values.shape[1] > 2:
+                #pca = PCA(n_components=feature_values.shape[0]-1)
+                    pca = PCA(n_components=2)
+                    feature_values = pca.fit_transform(feature_values)
+                    area = ConvexHull(feature_values).volume
+                    results.append({'spkid': spkid, 'AgeMonth': age, 'ConvexHullArea': round(area)})
+            except:
+                print(f'Not enough samples for speaker {spkid}, age {age} to create Convexhull')
+                continue
+                #results.append({'spkid': spkid, 'AgeMonth': age, 'ConvexHullArea': np.nan})
     
         # Convert results to DataFrame and save to Excel
         results_df = pd.DataFrame(results)
@@ -172,31 +182,35 @@ def vowel_variability(in_dir_path, feature_name, feature_column_names, out_dir_p
         df = pd.read_csv(os.path.join(in_dir_path, file))
         #df = df[df['IPA'].isin(target_vowels_IPA)].copy()
         #df.reset_index(inplace=True)
+        #Removing rows of speaker {spkid}, age {AgeMonth} due to missing IPA classes
+        grouped = df.groupby(['spkid', 'AgeMonth'])['IPA'].nunique()
+        groups_with_unique_ipa = grouped[grouped == int(file.split('.csv')[0].split('_')[3])].index
+        df = df[df.set_index(['spkid', 'AgeMonth']).index.isin(groups_with_unique_ipa)]
     
         # Group by 'spkid', 'AgeMonth', and 'IPA' to compute the mean and std for each vowel
-        mean_features = df.groupby(['spkid', 'AgeMonth', 'IPA'])[feature_column_names].mean().reset_index()
-        std_features = df.groupby(['spkid', 'AgeMonth', 'IPA'])[feature_column_names].std().reset_index()
+        #mean_features = df.groupby(['spkid', 'AgeMonth', 'IPA'])[feature_column_names].mean().reset_index()
+        #std_features = df.groupby(['spkid', 'AgeMonth', 'IPA'])[feature_column_names].std().reset_index()
     
         # Filter data to include only points within one standard deviation from the mean
-        filtered_df = pd.merge(df, mean_features, on=['spkid', 'AgeMonth', 'IPA'], suffixes=('', '_mean'))
-        filtered_df = pd.merge(filtered_df, std_features, on=['spkid', 'AgeMonth', 'IPA'], suffixes=('', '_std'))
+        #filtered_df = pd.merge(df, mean_features, on=['spkid', 'AgeMonth', 'IPA'], suffixes=('', '_mean'))
+        #filtered_df = pd.merge(filtered_df, std_features, on=['spkid', 'AgeMonth', 'IPA'], suffixes=('', '_std'))
 
-        condition = True
-        for feature in feature_column_names:
-            condition &= (filtered_df[feature] >= (filtered_df[feature + '_mean'] - 2 * filtered_df[feature + '_std'])) & \
-                        (filtered_df[feature] <= (filtered_df[feature + '_mean'] + 2 * filtered_df[feature + '_std']))
+        #condition = True
+        #for feature in feature_column_names:
+            #condition &= (filtered_df[feature] >= (filtered_df[feature + '_mean'] - 2 * filtered_df[feature + '_std'])) & \
+                        #(filtered_df[feature] <= (filtered_df[feature + '_mean'] + 2 * filtered_df[feature + '_std']))
 
-        filtered_df = filtered_df[condition]
+        #filtered_df = filtered_df[condition]
 
         # Group by 'spkid' and 'AgeMonth' to compute the convex hull area/volume
         results = []
-        for (spkid, age, vowel), group in filtered_df.groupby(['spkid', 'AgeMonth', 'IPA']):
+        for (spkid, age, vowel), group in df.groupby(['spkid', 'AgeMonth', 'IPA']):
             feature_values = group[feature_column_names].values
             mean_feature_values = np.mean(feature_values, axis=0).reshape(1, -1) # mean of each feature
             eq_dist = cdist(feature_values, mean_feature_values, metric='euclidean').flatten()
             sum_eq_dist = np.sum(eq_dist) # Sum the distances
             average_sum_distance = sum_eq_dist / len(feature_values) # average sum of distances
-            results.append({'spkid': spkid, 'AgeMonth': age,'IPA': vowel, 'variability': round(average_sum_distance)})
+            results.append({'spkid': spkid, 'AgeMonth': age,'IPA': vowel, '#Samples': len(feature_values),'variability': round(average_sum_distance)})
         # Convert results to DataFrame and save to Excel
         results_df = pd.DataFrame(results)
         results_df.dropna(inplace=True)
@@ -274,6 +288,9 @@ def vowel_separability(in_dir_path, feature_name, feature_column_names, out_dir_
         # Group by 'spkid' and 'AgeMonth' to compute the Pillai score using MANOVA test
         for (spkid, age), group in df.groupby(['spkid', 'AgeMonth']):
             #print(spkid, age)
+            if group['IPA'].nunique() != int(file.split('.csv')[0].split('_')[3]):
+                print(f"Skipping speaker {spkid}, age {age} due to missing classes.")
+                continue
             feature_values = group[feature_column_names].values
             #print(feature_values.shape)
         
@@ -301,11 +318,12 @@ def vowel_separability(in_dir_path, feature_name, feature_column_names, out_dir_
                     #formula = f"{' + '.join([f'`{col}`' for col in feature_column_names])} ~ C(IPA)"
                     manova = MANOVA.from_formula(formula, data=subset)
                     pillai_score = manova.mv_test().results['C(IPA)']['stat']['Value']['Pillai\'s trace']
-                    p_value = manova.mv_test().results['C(IPA)']['stat']['Pr > F']['Pillai\'s trace']
-                    if p_value < 0.05:
-                        all_pillai_scores.append(pillai_score)
-                    else:
-                        all_pillai_scores.append(np.nan)
+                    #p_value = manova.mv_test().results['C(IPA)']['stat']['Pr > F']['Pillai\'s trace']
+                    all_pillai_scores.append(pillai_score)
+                    #if p_value < 0.05:
+                        #all_pillai_scores.append(pillai_score)
+                    #else:
+                        #all_pillai_scores.append(np.nan)
                 except Exception as e:
                     #print(f"MANOVA failed for spkid={spkid} at AgeMonth={age} for pair ({ipa1}, {ipa2}): {e}")
                     all_pillai_scores.append(np.nan)
