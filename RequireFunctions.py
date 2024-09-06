@@ -14,17 +14,17 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 def vowel_space_expansion(in_dir_path, feature_name, feature_column_names, out_dir_path):
     """
-    Computes the vowel space expansion (convex hull area or volume) for specific vowels based on 
+    Computes the vowel space expansion (convex hull area) for specific vowels based on 
     acoustic features and saves the results to an Excel file. The function processes each CSV file 
     in the input directory and calculates the convex hull area for formant features (F1, F2) or 
-    MFCC features after dimensionality reduction using PCA if needed.
+    for MFCC features after dimensionality reduction using PCA if needed.
 
     The input CSV file names should follow the format:
     `featurename_language_register_numberofvowels_anythingnotimportant.csv`.
     For example: `formant_no_ADS_6_data.csv` for formant features of Norwegian ADS data with 6 vowels.
 
     For each speaker (`spkid`) and age group (`AgeMonth`), the function computes the mean feature values 
-    for each vowel (e.g., using F1, F2 for formants or MFCC1 to MFCC13 for MFCCs). It then calculates the convex hull area 
+    for each vowel (e.g., using F1, F2 for formants or PCA1 and PCA2 for MFCCs). It then calculates the convex hull area 
     using these acoustic features to represent vowel space expansion.
 
     Parameters:
@@ -87,26 +87,32 @@ def vowel_space_expansion(in_dir_path, feature_name, feature_column_names, out_d
         
     
         # Group by 'spkid', 'AgeMonth', and 'IPA' to compute the mean feature values for each vowel
-        mean_features = df.groupby(['spkid', 'AgeMonth', 'IPA'])[feature_column_names].mean().reset_index()
+        #mean_features = df.groupby(['spkid', 'AgeMonth', 'IPA'])[feature_column_names].mean().reset_index()
     
         # Group by 'spkid' and 'AgeMonth' to compute the convex hull area
         results = []
-        for (spkid, age), group in mean_features.groupby(['spkid', 'AgeMonth']):
+        for (spkid, age), group in df.groupby(['spkid', 'AgeMonth']):
             
                 if group['IPA'].nunique() != int(file.split('.csv')[0].split('_')[3]):
                     print(f"Skipping speaker {spkid}, age {age} due to missing classes.")
                     continue
-                feature_values = group[feature_column_names].values
+                #mean_features = group.groupby(['spkid', 'AgeMonth', 'IPA'])[feature_column_names].mean().reset_index()
+                #feature_values = mean_features[feature_column_names].values
             #if feature_values.shape[0] > feature_values.shape[1]:  # Check if there are at least 3 points
                 try:
-                    if feature_values.shape[1] == 2:
+                    if len(feature_column_names) == 2:
+                        mean_features = group.groupby(['spkid', 'AgeMonth', 'IPA'])[feature_column_names].mean().reset_index()
+                        feature_values = mean_features[feature_column_names].values
                         area = ConvexHull(feature_values).volume
                         results.append({'spkid': spkid, 'AgeMonth': age, 'ConvexHullArea': round(area)})
             #elif feature_values.shape[0] <= feature_values.shape[1] and feature_values.shape[1] > 2 and feature_values.shape[0] > 2:
-                    if feature_values.shape[1] > 2:
+                    if len(feature_column_names) > 2:
                 #pca = PCA(n_components=feature_values.shape[0]-1)
                         pca = PCA(n_components=2)
-                        feature_values = pca.fit_transform(feature_values)
+                        feature_values = pca.fit_transform(group[feature_column_names].values)
+                        group[['PCA1', 'PCA2']] = feature_values
+                        mean_features = group.groupby(['spkid', 'AgeMonth', 'IPA'])[['PCA1', 'PCA2']].mean().reset_index()
+                        feature_values = mean_features[['PCA1', 'PCA2']].values
                         area = ConvexHull(feature_values).volume
                         results.append({'spkid': spkid, 'AgeMonth': age, 'ConvexHullArea': round(area)})
                 except Exception as e:
@@ -127,8 +133,8 @@ def vowel_space_expansion(in_dir_path, feature_name, feature_column_names, out_d
 def vowel_variability(in_dir_path, feature_name, feature_column_names, out_dir_path):
     """
     Computes vowel space variability (convex hull area or volume) for specific vowels using acoustic features 
-    (formants or MFCCs) and filters data points that are within one standard deviation from the mean. 
-    For MFCC features, PCA is applied to reduce dimensionality to two, and convex hulls are computed. 
+    (formants or PCA(2) of MFCCs) with the data points that are within one standard deviation from the mean. 
+    For MFCC features, PCA is applied to reduce dimensionality to two, and then for both features (formants and PCA of MFCCs) convex hulls are computed. 
     The results are saved to an Excel file for each input CSV file.
 
     The input CSV file names should follow the format:
@@ -137,8 +143,7 @@ def vowel_variability(in_dir_path, feature_name, feature_column_names, out_dir_p
 
     The function filters data for each speaker, age, and vowel combination based on acoustic feature values, 
     retains only points within one standard deviation from the mean, and calculates the convex hull area (for 2D formants) 
-    or convex hull volume (for MFCC features projected onto 2D space). The mean of the remaining data is used to compute the average 
-    Euclidean distance from all data points within the one standard deviation filter to represent the vowel space variability.
+    or (for MFCC features projected onto 2D space) to compute compactness as variability measures. 
 
     Parameters:
     -----------
@@ -167,9 +172,9 @@ def vowel_variability(in_dir_path, feature_name, feature_column_names, out_dir_p
     Notes:
     ------
     - The function groups data by 'spkid', 'AgeMonth', and 'IPA' and filters points to include only those within one standard 
-      deviation from the mean of the specified acoustic features.
+      deviation from the mean of the specified acoustic features (formants or PCA of MFCCs).
     - For formant analysis (2D), the convex hull area is computed, while for MFCC features, PCA is used to project data onto 
-      two dimensions, and the convex hull volume is computed based on the transformed data.
+      two dimensions, and then convex hull area is computed based on the transformed data.
     - The output DataFrame saved in Excel includes columns for 'spkid', 'AgeMonth', 'IPA', 'Language', 'Register', '#Samples', 
       and 'variability' (the computed vowel space variability).
     - Files are processed one by one, and errors during computation for specific groups (e.g., due to insufficient data) 
