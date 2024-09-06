@@ -219,7 +219,7 @@ def vowel_variability(in_dir_path, feature_name, feature_column_names, out_dir_p
                         print(f"Skipping speaker {spkid}, age {age} due to less than 3 samples.")
                         continue
                     area = ConvexHull(feature_values).volume
-                    results.append({'spkid': spkid, 'AgeMonth': age,'IPA': vowel, 'variability': round(area)})
+                    results.append({'spkid': spkid, 'AgeMonth': age,'IPA': vowel, '#Samples': len(feature_values), 'variability': round(area)})
             #elif feature_values.shape[0] <= feature_values.shape[1] and feature_values.shape[1] > 2 and feature_values.shape[0] > 2:
                 if len(feature_column_names) > 2:
                         #pca = PCA(n_components=feature_values.shape[0]-1)
