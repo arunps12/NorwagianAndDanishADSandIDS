@@ -93,7 +93,7 @@ def delete_audio_from_dir(filename):
     if os.path.exists(filepath):
         os.remove(filepath)
 
-def extract_formants_per_glottal_pulse(in_file_path, target_vowels_IPA, wav_dir, register, out_file_path, Frame = False, parentgender=None):
+def extract_formants_per_glottal_pulse(in_file_path, target_vowels_IPA, wav_dir, register, out_file_path, Frame = False, center = False, parentgender=None):
     """
     Extracts formant frequencies for each vowel segment within an audio file by analyzing glottal pulses.
 
@@ -114,6 +114,8 @@ def extract_formants_per_glottal_pulse(in_file_path, target_vowels_IPA, wav_dir,
     Frame : bool, optional
         If True, extracts formants for each frame within a segment and computes delta and delta-delta formants. 
         If False, extracts average formant values across glottal pulses for each segment. Default is False.
+    center : bool, optional (default=False)
+    If True, extracts formants for center frame within a segment. 
     parentgender : str, optional
         Gender of the speaker's parent, used to set pitch and formant ceiling values.
         'F' for Father (lower pitch), 'M' for Mother (higher pitch). Default is None (treated as 'M').
@@ -225,31 +227,41 @@ def extract_formants_per_glottal_pulse(in_file_path, target_vowels_IPA, wav_dir,
                             formant_matrix[i, k] = statistics.mean(formant_lists[k])
                         else:
                             formant_matrix[i, k] = np.nan  # Or use NaN to indicate missing data
+                if center:
+                    # Only keep the center frame's data
+                    center_frame_idx = num_frames // 2
+                    df_temp = pd.DataFrame([formant_matrix[center_frame_idx]], columns=['F1', 'F2'])
+                    df_temp['spkid'] = row['spkid']
+                    df_temp['IPA'] = row['IPA']
+                    df_temp['AgeMonth'] = row['AgeMonth']
+                    df_temp['Register'] = register
+                    df_temp['time_start'] = row['time_start']
+                    df_temp['duration(ms)'] = 1000 * (row['time_end'] - row['time_start'])
 
-                # Calculate delta and delta-delta formants
-                delta_formant_matrix = librosa.feature.delta(formant_matrix, width=3, order=1, axis=0)
-                delta_delta_formant_matrix = librosa.feature.delta(formant_matrix, width=3, order=2, axis=0)
+                    df_temp = df_temp[['spkid', 'IPA', 'AgeMonth', 'Register', 'time_start', 'duration(ms)', 'F1', 'F2']]
+                    temp_dfs.append(df_temp)
+                    #delete_audio_from_dir('seg.wav')
+                else:
+                    # Append all frames' data
+                    delta_formant_matrix = librosa.feature.delta(formant_matrix, width=3, order=1, axis=0)
+                    delta_delta_formant_matrix = librosa.feature.delta(formant_matrix, width=3, order=2, axis=0)
 
-                # Create a temporary DataFrame for the current file
-                df_temp = pd.DataFrame(formant_matrix, columns=['F1', 'F2'])
-                df_temp['spkid'] = row['spkid']
-                df_temp['IPA'] = row['IPA']
-                df_temp['AgeMonth'] = row['AgeMonth']
-                df_temp['Register'] = register
-                df_temp['time_start'] = row['time_start'] # use this information to get number of frames for the current vowel segment
-                df_temp['duration(ms)'] = 1000 * (row['time_end'] - row['time_start'])  # Duration in milliseconds
+                    # Create a temporary DataFrame for the current file with delta and delta-delta formants
+                    df_temp = pd.DataFrame(formant_matrix, columns=['F1', 'F2'])
+                    df_temp['spkid'] = row['spkid']
+                    df_temp['IPA'] = row['IPA']
+                    df_temp['AgeMonth'] = row['AgeMonth']
+                    df_temp['Register'] = register
+                    df_temp['time_start'] = row['time_start']
+                    df_temp['duration(ms)'] = 1000 * (row['time_end'] - row['time_start'])
 
-                # Add delta and delta-delta formants
-                df_temp[['dF1', 'dF2']] = delta_formant_matrix
-                df_temp[['ddF1', 'ddF2']] = delta_delta_formant_matrix
+                    df_temp[['dF1', 'dF2']] = delta_formant_matrix
+                    df_temp[['ddF1', 'ddF2']] = delta_delta_formant_matrix
 
-                # Rearrange columns: move F1, F2, dF1, dF2, ddF1, ddF2 to the end
-                df_temp = df_temp[['spkid', 'IPA', 'AgeMonth', 'Register', 'time_start', 'duration(ms)', 'F1', 'F2', 'dF1', 'dF2', 'ddF1', 'ddF2']]
-
-                temp_dfs.append(df_temp)
-
-                # Delete the temporary audio segment
-                delete_audio_from_dir('seg.wav')
+                    df_temp = df_temp[['spkid', 'IPA', 'AgeMonth', 'Register', 'time_start', 'duration(ms)', 'F1', 'F2', 'dF1', 'dF2', 'ddF1', 'ddF2']]
+                    temp_dfs.append(df_temp)
+                    # Delete the temporary audio segment
+                    #delete_audio_from_dir('seg.wav')
             else:
                 # Initialize formant lists
                 formant_lists = [[] for _ in range(4)]
@@ -281,8 +293,8 @@ def extract_formants_per_glottal_pulse(in_file_path, target_vowels_IPA, wav_dir,
                 df_temp = df_temp[['spkid', 'IPA', 'AgeMonth', 'Register', 'duration(ms)', 'F1', 'F2', 'F3', 'F4']]
 
                 temp_dfs.append(df_temp)
-                # Delete the temporary audio segment
-                delete_audio_from_dir('seg.wav')
+            # Delete the temporary audio segment
+            delete_audio_from_dir('seg.wav')
         except Exception as e:
             # Ensure the temporary audio segment is deleted in case of error
             delete_audio_from_dir('seg.wav')
@@ -299,7 +311,7 @@ def extract_formants_per_glottal_pulse(in_file_path, target_vowels_IPA, wav_dir,
     print('Formant values have benn saved') 
 
 
-def extract_mfcc(in_file_path, target_vowels_IPA, wav_dir, register,out_file_path, Frame=False, parentgender=None):
+def extract_mfcc(in_file_path, target_vowels_IPA, wav_dir, register,out_file_path, Frame=False, center = False, parentgender=None):
     """
     Extracts Mel-frequency cepstral coefficients (MFCCs) from audio segments and stores them in a DataFrame.
 
@@ -320,6 +332,8 @@ def extract_mfcc(in_file_path, target_vowels_IPA, wav_dir, register,out_file_pat
         Register type (ADS or IDS), used for file output or metadata purposes.
     Frame : bool, optional
         If True, extracts MFCC features frame-by-frame. If False, computes the mean MFCCs for each segment.
+    center : bool, optional (default=False)
+    If True, extracts mfcc for center frame within a segment. 
     parentgender : str, optional
         Gender of the speaker's parent mother or father.
 
@@ -391,21 +405,40 @@ def extract_mfcc(in_file_path, target_vowels_IPA, wav_dir, register,out_file_pat
             dmfcc_matrix = librosa.feature.delta(mfccs_matrix, width=3, order=1, axis=0)
 
             if Frame:
-                # Create a DataFrame with frame-level MFCCs
-                df_temp = pd.DataFrame(mfccs_matrix.T, columns=mfcc_columns)
-                df_temp['spkid'] = row['spkid']
-                df_temp['IPA'] = row['IPA']
-                df_temp['AgeMonth'] = row['AgeMonth']
-                df_temp['Register'] = register
-                df_temp['time_start'] = row['time_start']
-                df_temp['duration(ms)'] = 1000 * (row['time_end'] - row['time_start'])
+                num_frames = mfccs_matrix.shape[1]
+                if center:
+                    # Extract MFCCs for the center frame only
+                    center_frame_idx = num_frames // 2
+                    df_temp = pd.DataFrame([mfccs_matrix[:, center_frame_idx]], columns=mfcc_columns)
+                    df_temp['spkid'] = row['spkid']
+                    df_temp['IPA'] = row['IPA']
+                    df_temp['AgeMonth'] = row['AgeMonth']
+                    df_temp['Register'] = register
+                    df_temp['time_start'] = row['time_start']
+                    df_temp['duration(ms)'] = 1000 * (row['time_end'] - row['time_start'])
+                    
+                    # Append to temp_dfs
+                    df_temp = df_temp[['spkid', 'IPA', 'AgeMonth', 'Register', 'time_start', 'duration(ms)'] + mfcc_columns]
+                    temp_dfs.append(df_temp)
 
-                # Add delta MFCCs
-                for i, col in enumerate(dmfcc_columns):
-                    df_temp[col] = dmfcc_matrix[i, :]
-                # Shift mfccs column in last
-                df_temp = df_temp[[col for col in ['spkid', 'IPA', 'AgeMonth', 'Register', 'time_start', 'duration(ms)'] + mfcc_columns+dmfcc_columns]]
-                temp_dfs.append(df_temp)
+                else:
+                    # Create a DataFrame with frame-level MFCCs
+                    df_temp = pd.DataFrame(mfccs_matrix.T, columns=mfcc_columns)
+                    df_temp['spkid'] = row['spkid']
+                    df_temp['IPA'] = row['IPA']
+                    df_temp['AgeMonth'] = row['AgeMonth']
+                    df_temp['Register'] = register
+                    df_temp['time_start'] = row['time_start']
+                    df_temp['duration(ms)'] = 1000 * (row['time_end'] - row['time_start'])
+
+                    # Add delta MFCCs for all frames
+                    for i, col in enumerate(dmfcc_columns):
+                        df_temp[col] = dmfcc_matrix[i, :]
+                    
+                    # Append to temp_dfs
+                    df_temp = df_temp[['spkid', 'IPA', 'AgeMonth', 'Register', 'time_start', 'duration(ms)'] + mfcc_columns + dmfcc_columns]
+                    temp_dfs.append(df_temp)
+
 
             else:
                 # Mean along the time axis (axis 1)
