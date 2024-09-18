@@ -352,19 +352,27 @@ def vowel_separability(in_dir_path, feature_name, feature_column_names, out_dir_
             if group['IPA'].nunique() != int(file.split('.csv')[0].split('_')[3]):
                 print(f"Skipping speaker {spkid}, age {age} due to missing classes.")
                 continue
-            feature_values = group[feature_column_names].values
-            #print(feature_values.shape)
-        
             if len(group) < 2:
                 continue
-        
+
+            feature_values = group[feature_column_names].values
+            scaler = StandardScaler()
+
+            if len(feature_column_names) > 2:
+                
+                pca = PCA(n_components=2)
+                feature_values = pca.fit_transform(feature_values)
+                scaled_features = scaler.fit_transform(feature_values)
+                pca_column_names = ['PCA1', 'PCA2']
+                df_scaled = pd.DataFrame(scaled_features, columns=pca_column_names)
+                df_scaled['IPA'] = group['IPA'].values
             # Standardizing the feature data
-            #scaler = StandardScaler()
-            #scaled_features = scaler.fit_transform(feature_values)
+            else:
+                scaled_features = scaler.fit_transform(feature_values)
         
-            # Prepare the data for MANOVA
-            df_scaled = pd.DataFrame(feature_values, columns=feature_column_names)
-            df_scaled['IPA'] = group['IPA'].values
+                # Prepare the data for MANOVA
+                df_scaled = pd.DataFrame(scaled_features, columns=feature_column_names)
+                df_scaled['IPA'] = group['IPA'].values
 
             # Compute Pillai score for each pair
             all_pillai_scores = []
@@ -374,8 +382,10 @@ def vowel_separability(in_dir_path, feature_name, feature_column_names, out_dir_
                 
                     if subset.shape[0] < 2:
                         continue  # Skip if there are not enough samples for the pair
-                
-                    formula = f"{'+'.join(feature_column_names)} ~ C(IPA)"
+                    if feature_name == 'formant':
+                        formula = f"{'+'.join(feature_column_names)} ~ C(IPA)"
+                    else:
+                        formula = f"{'+'.join(pca_column_names)} ~ C(IPA)"
                     #formula = f"{' + '.join([f'`{col}`' for col in feature_column_names])} ~ C(IPA)"
                     manova = MANOVA.from_formula(formula, data=subset)
                     pillai_score = manova.mv_test().results['C(IPA)']['stat']['Value']['Pillai\'s trace']
