@@ -864,7 +864,7 @@ lmer.plot.emmeans.contrasts <- function(emmeans.data,
     p_value <- contrasts_data$p.value[i]
     # Format p-value
     p_value_formatted <- ifelse(p_value < 0.001, "< 0.001", sprintf("= %.3f", p_value))
-    annotations[i] <- paste0("p ", p_value_formatted,  " (", contrast, ")")
+    annotations[i] <- paste0("p ", p_value_formatted)#,  " (", contrast, ")")
     
     # Debugging statements
     #cat("Processing contrast:", contrast, "\n")
@@ -987,7 +987,7 @@ lmer.plot.emmeans.contrasts <- function(emmeans.data,
       segment_data <- rbind(segment_data, data.frame(x1 = x1, x2 = x2, y = y_position))
       
       # Add the data for the p-value annotation
-      annotation_data <- rbind(annotation_data, data.frame(x = mean(c(x1, x2)), y = y_position + 0.5, label = annotations[i]))
+      annotation_data <- rbind(annotation_data, data.frame(x = mean(c(x1, x2)), y = y_position, label = annotations[i]))
     }
     
     # Now, add the segments and annotations to the plot at once
@@ -1076,7 +1076,7 @@ glmmTB.plot.emmeans.contrasts <- function(emmeans.data,
     p_value <- contrasts_data$p.value[i]
     # Format p-value
     p_value_formatted <- ifelse(p_value < 0.001, "< 0.001", sprintf("= %.3f", p_value))
-    annotations[i] <- paste0("p ", p_value_formatted,  " (", contrast, ")")
+    annotations[i] <- paste0("p ", p_value_formatted)#,  " (", contrast, ")")
     
     # Debugging statements
     #cat("Processing contrast:", contrast, "\n")
@@ -1183,7 +1183,7 @@ glmmTB.plot.emmeans.contrasts <- function(emmeans.data,
       segment_data <- rbind(segment_data, data.frame(x1 = x1, x2 = x2, y = y_position))
       
       # Add the data for the p-value annotation
-      annotation_data <- rbind(annotation_data, data.frame(x = mean(c(x1, x2)), y = y_position + 0.005, label = annotations[i]))
+      annotation_data <- rbind(annotation_data, data.frame(x = mean(c(x1, x2)), y = y_position, label = annotations[i]))
     }
     
     # Now, add the segments and annotations to the plot at once
