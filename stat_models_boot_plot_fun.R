@@ -26,7 +26,7 @@ lmer.full.reduced.null.compare <- function(fullmformula,
                                            nullm = FALSE, 
                                            nullmformula = NULL,
                                            data_list = list(...),
-                                           margianl_means = FALSE,
+                                           marginal_means = FALSE,
                                            specs = NULL,
                                            ...) {
   
@@ -158,7 +158,7 @@ lmer.full.reduced.null.compare <- function(fullmformula,
       cat(blue("Max VIF value of the Full Model:", max(vif_full), "\n"))
       
       # Compute emmeans for full model if requested
-      if (margianl_means) {
+      if (marginal_means) {
         if (is.null(specs)) {
           stop("Please provide 'specs' argument for computing emmeans.")
         }
@@ -222,7 +222,7 @@ lmer.full.reduced.null.compare <- function(fullmformula,
       cat(blue("Max VIF value of the Reduced Model:", max(vif_red), "\n"))
       
       # Compute emmeans for reduced model if requested
-      if (margianl_means) {
+      if (marginal_means) {
         if (is.null(specs)) {
           stop("Please provide 'specs' argument for computing emmeans.")
         }
@@ -274,6 +274,7 @@ lmer.full.reduced.null.compare <- function(fullmformula,
 
 
 
+
 # glmmTB model
 glmmTB.full.reduced.null.compare <- function(fullmformula,
                                              family,
@@ -283,44 +284,56 @@ glmmTB.full.reduced.null.compare <- function(fullmformula,
                                              redmformula = NULL, 
                                              nullm = FALSE, 
                                              nullmformula = NULL,
-                                             data_list = list(...)) {
+                                             data_list = list(...),
+                                             marginal_means = FALSE,
+                                             specs = NULL,
+                                             ...) {
+  # Load required packages
+  if (!requireNamespace("glmmTMB", quietly = TRUE)) {
+    stop("The 'glmmTMB' package is required but is not installed.")
+  }
+  if (!requireNamespace("emmeans", quietly = TRUE)) {
+    stop("The 'emmeans' package is required but is not installed.")
+  }
+  if (!requireNamespace("crayon", quietly = TRUE)) {
+    stop("The 'crayon' package is required but is not installed.")
+  }
+  
+  library(glmmTMB)
+  library(emmeans)
+  library(crayon)
   
   # Combine input dataframes
   combined_data <- bind_rows(data_list)
-  cat(blue("structure of combined data. \n"))
+  cat(blue("Structure of combined data:\n"))
   str(combined_data)
-  
-  
   
   # Extract the response variable 
   terms_obj <- terms(fullmformula)
-  response_var <- as.character(attr(terms_obj, "variables"))[2]# Extract the response variable
+  response_var <- as.character(attr(terms_obj, "variables"))[2]  # Extract the response variable
   print(response_var)
   
   # Standardize all numeric columns except the response variable
-  # Identify numeric columns
   numeric_columns <- sapply(combined_data, is.numeric)
-  #print(numeric_columns)
-  
-  # Subset numeric columns and exclude the response variable
   numeric_columns <- setdiff(names(combined_data)[which(numeric_columns)], response_var)
-  #print(numeric_columns)
   combined_data[numeric_columns] <- lapply(combined_data[numeric_columns], scale)  # Standardize numeric columns
   
   # Check structure of combined data after scaling
-  cat(blue("structure of combined data after scaling. \n"))
+  cat(blue("Structure of combined data after scaling:\n"))
   str(combined_data)
   
   # Histogram of Response variable
   p_histogram <- ggplot(combined_data, aes_string(x = response_var)) +
     geom_histogram(bins = 30) +
     labs(title = "Histogram of Response Variable")
-  print(p_histogram)  
+  print(p_histogram)
   
+  # Initialize emmeans variable to NULL
+  #emm <- NULL
   # Fit the full model using glmmTMB
   fit_model <- NULL
   if (fullm && !is.null(fullmformula)) {
-    cat(blue("fitting Full Model. \n"))
+    cat(blue("Fitting Full Model.\n"))
     fit_model <- tryCatch({
       glmmTMB(formula = fullmformula, data = combined_data, family = family, ziformula = zi_formula) 
     }, error = function(e) {
@@ -330,13 +343,10 @@ glmmTB.full.reduced.null.compare <- function(fullmformula,
     full_model_summary <- summary(fit_model)
     cat(blue("Summary of the full model:\n"))
     print(full_model_summary)
-  }
-  
-  if (fullm && !is.null(fullmformula)) {
     cat(blue("Simulate residuals for the fitted full glmmTMB model.\n"))
     simulated_residuals_full <- simulateResiduals(fittedModel = fit_model, plot = T)
     
-    cat(blue("Check for overdispersion with DHARMa test for full model. \n"))
+    cat(blue("Check for overdispersion with DHARMa test for full model.\n"))
     dispersion_test_full <- DHARMa::testDispersion(simulationOutput = simulated_residuals_full)
     
     # Print the results of the dispersion test
@@ -344,18 +354,35 @@ glmmTB.full.reduced.null.compare <- function(fullmformula,
     cat("Dispersion:", dispersion_test_full$statistic, "\n")
     cat("p-value:", dispersion_test_full$p.value, "\n")
     cat("Alternative hypothesis:", dispersion_test_full$alternative, "\n")
+    
+    # Compute VIF (multicollinearity check)
     collinearity_results_full <- check_collinearity(fit_model)
-    cat(blue("VIF for the full model: \n"))
+    cat(blue("VIF for the full model:\n"))
     print(collinearity_results_full)
+    
     logLik_full <- logLik(fit_model)
     df_full <- attr(logLik_full, "df")
     cat(blue("Full Model: Log-Likelihood =", round(as.numeric(logLik_full), 2), ", Degrees of Freedom =", df_full, "\n"))
+    
+    # Compute marginal means if requested
+    if (marginal_means) {
+      if (is.null(specs)) {
+        stop("Please provide 'specs' argument for computing emmeans.")
+      }
+      cat(blue("Computing estimated marginal means for the Full Model.\n"))
+      emm <- emmeans(fit_model, specs = specs, type = "response")
+      print(summary(emm))
+    }
   }
+  
+  #if (fullm && !is.null(fullmformula)) {
+    
+  #}
   
   # Fit the reduced model if specified
   red_fit_model <- NULL
   if (redm && !is.null(redmformula)) {
-    cat(blue("fitting Reduced Model. \n"))
+    cat(blue("Fitting Reduced Model.\n"))
     red_fit_model <- tryCatch({
       glmmTMB(formula = redmformula, data = combined_data, family = family, ziformula = zi_formula)
     }, error = function(e) {
@@ -365,13 +392,10 @@ glmmTB.full.reduced.null.compare <- function(fullmformula,
     red_model_summary <- summary(red_fit_model)
     cat(blue("Summary of the reduced model:\n"))
     print(red_model_summary)
-  }
-  
-  if (redm && !is.null(redmformula)) {
     cat(blue("Simulate residuals for the fitted reduced glmmTMB model.\n"))
     simulated_residuals_red <- simulateResiduals(fittedModel = red_fit_model, plot = T)
     
-    cat(blue("Check for overdispersion with DHARMa test for reduced model. \n"))
+    cat(blue("Check for overdispersion with DHARMa test for reduced model.\n"))
     dispersion_test_red <- DHARMa::testDispersion(simulationOutput = simulated_residuals_red)
     
     # Print the results of the dispersion test
@@ -379,44 +403,60 @@ glmmTB.full.reduced.null.compare <- function(fullmformula,
     cat("Dispersion:", dispersion_test_red$statistic, "\n")
     cat("p-value:", dispersion_test_red$p.value, "\n")
     cat("Alternative hypothesis:", dispersion_test_red$alternative, "\n")
-    #cat(blue("collinearity_results_reduced model.\n"))
+    
+    # Compute VIF (multicollinearity check)
     collinearity_results_red <- check_collinearity(red_fit_model)
     cat(blue("VIF for the reduced model:\n"))
     print(collinearity_results_red)
+    
     logLik_red <- logLik(red_fit_model)
     df_red <- attr(logLik_red, "df")
     cat(blue("Reduced Model: Log-Likelihood =", round(as.numeric(logLik_red), 2), ", Degrees of Freedom =", df_red, "\n"))
+    
+    # Compute marginal means if requested
+    if (marginal_means) {
+      if (is.null(specs)) {
+        stop("Please provide 'specs' argument for computing emmeans.")
+      }
+      cat(blue("Computing estimated marginal means for the Reduced Model.\n"))
+      emm <- emmeans(red_fit_model, specs = specs, type = "response")
+      print(summary(emm))
+    }
   }
+  
+  #if (redm && !is.null(redmformula)) {
+    
+  #}
   
   # Fit the null model if specified
   null_fit_model <- NULL
   if (nullm && !is.null(nullmformula)) {
-    cat(blue("fitting NUll Model. \n"))
+    cat(blue("Fitting Null Model.\n"))
     null_fit_model <- tryCatch({
       glmmTMB(formula = nullmformula, data = combined_data, family = family, ziformula = zi_formula)
     }, error = function(e) {
       cat(blue("Error in fitting null model:", e$message, "\n"))
       return(NULL)
     })
-    
   }
   
-  # Compare full or reduced model with null model
+  # Compare models using ANOVA
   if (nullm && !is.null(nullmformula)) {
-    if (redm && !is.null(redmformula)) {
-      cat(blue("Comparing reduced and null models using ANOVA (Likelihood Ratio Test):\n"))
+    if (redm && !is.null(redmformula) && !is.null(red_fit_model) && !is.null(null_fit_model)) {
+      cat(blue("Comparing Reduced and Null Models using ANOVA (Likelihood Ratio Test):\n"))
       reduced_null_model_comparison <- anova(red_fit_model, null_fit_model)
       print(reduced_null_model_comparison)
-    } else if (fullm &&!is.null(fullmformula)) {
-      cat(blue("Comparing full and null models using ANOVA (Likelihood Ratio Test):\n"))
+    } else if (fullm && !is.null(fullmformula) && !is.null(fit_model) && !is.null(null_fit_model)) {
+      cat(blue("Comparing Full and Null Models using ANOVA (Likelihood Ratio Test):\n"))
       full_null_model_comparison <- anova(fit_model, null_fit_model)
       print(full_null_model_comparison)
     }
   }
-
+  
   # Return the fitted models
-  return(list(full_model = fit_model, reduced_model = red_fit_model, null_model = null_fit_model, fit_data = combined_data))
+  return(list(full_model = fit_model, reduced_model = red_fit_model, null_model = null_fit_model, fit_data = combined_data, emmeans = emm))
 }
+
 
 # 3. fun for bootstrapped predictions
 
@@ -756,14 +796,14 @@ compute_contrasts <- function(margian_means, compute_pairwise = FALSE, custom_co
     # No contrasts computed
     contrast_results <- NULL
   }
-  
-  # Return results as a datafrmae
+  print(contrast_results)
+  # Return results as a list
   return(list(contrasts = contrast_results))
 }
 
 
 
-plot.emmeans.contrasts <- function(emmeans.data, 
+lmer.plot.emmeans.contrasts <- function(emmeans.data, 
                                    contrasts.data, 
                                    raw_data, 
                                    y.ax.transformation = FALSE, 
@@ -906,7 +946,7 @@ plot.emmeans.contrasts <- function(emmeans.data,
   if (length(comparisons) > 0) {
     # Adjust y positions for annotations
     max_y <- max(raw_data$value)
-    y_positions <- seq(max_y + 30, by = 40, length.out = length(comparisons))
+    y_positions <- seq(max_y + ((y_breaks[2]-y_breaks[1])/10), by = ((y_breaks[2]-y_breaks[1])/2), length.out = length(comparisons))
     
     # Create empty data frames to collect segments and annotations
     segment_data <- data.frame(x1 = numeric(), x2 = numeric(), y = numeric())
@@ -953,9 +993,9 @@ plot.emmeans.contrasts <- function(emmeans.data,
     # Now, add the segments and annotations to the plot at once
     p <- p +
       geom_segment(data = segment_data, aes(x = x1, xend = x2, y = y, yend = y), inherit.aes = FALSE, color = "black") +
-      geom_segment(data = segment_data, aes(x = x1, xend = x1, y = y, yend = y - 10), inherit.aes = FALSE, color = "black") +  # Left whisker
-      geom_segment(data = segment_data, aes(x = x2, xend = x2, y = y, yend = y - 10), inherit.aes = FALSE, color = "black") +  # Right whisker
-      geom_text(data = annotation_data, aes(x = x, y = y + 5, label = label), inherit.aes = FALSE, vjust = 0, hjust = 0.5)
+      geom_segment(data = segment_data, aes(x = x1, xend = x1, y = y, yend = y - ((y_breaks[2]-y_breaks[1])/10)), inherit.aes = FALSE, color = "black") +  # Left whisker
+      geom_segment(data = segment_data, aes(x = x2, xend = x2, y = y, yend = y - ((y_breaks[2]-y_breaks[1])/10)), inherit.aes = FALSE, color = "black") +  # Right whisker
+      geom_text(data = annotation_data, aes(x = x, y = y + ((y_breaks[2]-y_breaks[1])/20), label = label), inherit.aes = FALSE, vjust = 0, hjust = 0.5)
     
     # Connect points for the same `spkid`
     p <- p + geom_line(data = raw_data, aes(x = Group, y = value, group = spkid), color = "lightgrey", linetype = "solid", linewidth = 0.3, alpha = 0.3)
@@ -978,3 +1018,198 @@ plot.emmeans.contrasts <- function(emmeans.data,
   }
 }
 
+glmmTB.plot.emmeans.contrasts <- function(emmeans.data, 
+                                        contrasts.data, 
+                                        raw_data, 
+                                        x_labs = NULL, 
+                                        y_labs = NULL, 
+                                        y_lim = NULL,
+                                        scale_size_range = NULL,
+                                        color_gradient_low = "grey60",   
+                                        color_gradient_high = "grey10",  
+                                        color_breaks = NULL,             
+                                        size_breaks = NULL,              
+                                        y_breaks = NULL,
+                                        size_scaling = NULL,
+                                        aspect_ratio = NULL,
+                                        title = NULL,
+                                        legend = FALSE
+) {
+  # Load required packages
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    install.packages("ggplot2")
+  }
+  library(ggplot2)
+  
+  # Convert emmeans_data to data frame if necessary
+  if (!is.data.frame(emmeans.data)) {
+    emmeans_data <- as.data.frame(emmeans.data)
+  }
+  
+  # Create Group variable in emmeans_data
+  emmeans_data$Group <- interaction(emmeans_data$Register, emmeans_data$Language, sep = "*")
+  
+  # Ensure Group is a factor with a specific order
+  emmeans_data$Group <- factor(emmeans_data$Group, levels = unique(emmeans_data$Group))
+  
+  # Print levels of Group for debugging
+  #print("Levels of emmeans_data$Group:")
+  #print(levels(emmeans_data$Group))
+  
+  # Convert contrasts_data to data frame if necessary
+  if (!is.data.frame(contrasts.data)) {
+    contrasts_data <- as.data.frame(contrasts.data)
+  }
+  
+  # Prepare comparisons and annotations based on contrasts_data
+  comparisons <- list()
+  annotations <- c()
+  
+  for (i in 1:nrow(contrasts_data)) {
+    contrast <- contrasts_data$contrast[i]
+    # Remove spaces and split contrast into groups
+    contrast_clean <- gsub(" ", "", contrast)
+    # Split on "-" or "vs"
+    groups <- unlist(strsplit(contrast_clean, "-|vs"))
+    comparisons[[i]] <- groups
+    contrast <- contrasts_data$contrast[i]
+    p_value <- contrasts_data$p.value[i]
+    # Format p-value
+    p_value_formatted <- ifelse(p_value < 0.001, "< 0.001", sprintf("= %.3f", p_value))
+    annotations[i] <- paste0("p ", p_value_formatted,  " (", contrast, ")")
+    
+    # Debugging statements
+    #cat("Processing contrast:", contrast, "\n")
+    #cat("Extracted groups:", groups, "\n")
+  }
+  
+  # Create the plot
+  p <- ggplot()
+  
+  # If raw_data is provided, plot raw data points
+  if (!is.null(raw_data)) {
+    # Ensure raw_data has Register, Language, and value columns
+    if (!all(c("Register", "Language", "value") %in% colnames(raw_data))) {
+      stop("raw_data must contain 'Register', 'Language', and 'value' columns.")
+    }
+    # Create Group variable in raw_data
+    raw_data$Group <- interaction(raw_data$Register, raw_data$Language, sep = "*")
+    # Ensure Group levels match emmeans_data
+    raw_data$Group <- factor(raw_data$Group, levels = levels(emmeans_data$Group))
+  }
+  
+  
+  # Adjust point sizes based on the number of observations
+  if (!is.null(size_scaling)) {
+    if (size_scaling == "log") {
+      size_mapping <- log(raw_data$n + 1)
+    } else if (size_scaling == "sqrt") {
+      size_mapping <- sqrt(raw_data$n)
+    } else if (size_scaling == "rescale") {
+      size_mapping <- scales::rescale(raw_data$n, to = c(1, 5))
+    } else {
+      stop("Unsupported size scaling method. Use 'log', 'sqrt', or 'rescale'.")
+    }
+  } else {
+    size_mapping <- raw_data$n  
+  }
+  
+  # Plot raw data points
+  if (!is.null(raw_data)) {
+    p <- p + geom_point(data = raw_data, aes(x = Group, y = value, size = size_mapping), alpha = 0.3, color = "gray50")
+  }
+  # Set size range, color gradients, and axis limits
+  p <- p + scale_size_continuous(range = scale_size_range, breaks = size_breaks) +
+    scale_color_gradient(low = color_gradient_low, high = color_gradient_high, breaks = color_breaks) +
+    scale_y_continuous(limits = y_lim, breaks = y_breaks)
+  
+  if (legend) {
+    p <- p + guides(
+      color = guide_legend("n"),  
+      size = guide_legend("n")
+    )
+  } else {
+    p <- p + guides(color = "none", size = "none")
+  }
+  
+  # Plot estimated marginal means as points and lines
+  p <- p + 
+    geom_point(data = emmeans_data, aes(x = Group, y = response), size = 3, color = "blue") +
+    geom_errorbar(data = emmeans_data, aes(x = Group, ymin = asymp.LCL, ymax = asymp.UCL),
+                  width = 0.1, color = "blue")
+  
+  # Add significance annotations with lines and whiskers
+  if (length(comparisons) > 0) {
+    # Adjust y positions for annotations
+    max_y <- max(raw_data$value)
+    y_positions <- seq(max_y + (y_breaks[2]-y_breaks[1]), by = ((y_breaks[2]-y_breaks[1])/2), length.out = length(comparisons))
+    
+    # Create empty data frames to collect segments and annotations
+    segment_data <- data.frame(x1 = numeric(), x2 = numeric(), y = numeric())
+    annotation_data <- data.frame(x = numeric(), y = numeric(), label = character())
+    
+    # Create a set to store pairs that have already been annotated
+    annotated_pairs <- list()
+    
+    for (i in 1:length(comparisons)) {
+      group1 <- comparisons[[i]][1]
+      group2 <- comparisons[[i]][2]
+      
+      # Get x positions of the groups (convert to numeric as factors are used)
+      x1 <- as.numeric(which(levels(emmeans_data$Group) == group1))
+      x2 <- as.numeric(which(levels(emmeans_data$Group) == group2))
+      
+      # Ensure x1 is less than x2
+      if (x1 > x2) {
+        temp <- x1
+        x1 <- x2
+        x2 <- temp
+      }
+      
+      # Combine the groups into a string to use as a key
+      pair_key <- paste(sort(c(group1, group2)), collapse = "-")
+      
+      # Check if this pair has already been annotated
+      if (pair_key %in% annotated_pairs) {
+        next  # Skip if the pair has already been annotated
+      } else {
+        annotated_pairs <- c(annotated_pairs, pair_key)  # Mark this pair as annotated
+      }
+      
+      # Set y position for the annotation
+      y_position <- y_positions[i]
+      
+      # Add the data for the line segment (horizontal line and whiskers)
+      segment_data <- rbind(segment_data, data.frame(x1 = x1, x2 = x2, y = y_position))
+      
+      # Add the data for the p-value annotation
+      annotation_data <- rbind(annotation_data, data.frame(x = mean(c(x1, x2)), y = y_position + 0.005, label = annotations[i]))
+    }
+    
+    # Now, add the segments and annotations to the plot at once
+    p <- p +
+      geom_segment(data = segment_data, aes(x = x1, xend = x2, y = y, yend = y), inherit.aes = FALSE, color = "black") +
+      geom_segment(data = segment_data, aes(x = x1, xend = x1, y = y, yend = y - ((y_breaks[2]-y_breaks[1])/4)), inherit.aes = FALSE, color = "black") +  # Left whisker
+      geom_segment(data = segment_data, aes(x = x2, xend = x2, y = y, yend = y - ((y_breaks[2]-y_breaks[1])/4)), inherit.aes = FALSE, color = "black") +  # Right whisker
+      geom_text(data = annotation_data, aes(x = x, y = y + ((y_breaks[2]-y_breaks[1])/20), label = label), inherit.aes = FALSE, vjust = 0, hjust = 0.5)
+    
+    # Connect points for the same `spkid`
+    p <- p + geom_line(data = raw_data, aes(x = Group, y = value, group = spkid), color = "lightgrey", linetype = "solid", linewidth = 0.3, alpha = 0.3)
+    
+    # Customize the plot
+    p <- p +
+      labs(x = x_labs, y = y_labs, title = title) +
+      theme_minimal() +
+      theme(panel.border = element_rect(color = "black", fill = NA, linewidth = 1.5),  
+            panel.grid.major.x = element_blank(),                                      
+            panel.grid.major.y = element_line(color = "grey80", linewidth = 0.5),      
+            panel.grid.minor = element_blank(),
+            axis.text.x = element_text(angle = 45, hjust = 1),
+            axis.line = element_line(color = "black", linewidth = 0.5),
+            plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+            aspect.ratio = aspect_ratio) 
+    
+    # Display the plot
+    print(p)
+  }
+}
