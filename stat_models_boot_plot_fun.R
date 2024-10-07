@@ -734,6 +734,10 @@ factor.interaction.group.ci.plot <- function(plot.data,
           panel.grid.minor = element_blank(),                                        
           axis.line = element_line(color = "black", linewidth = 0.5),
           plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+          axis.text.x = element_text(size = 12, face = "bold", hjust = 1),
+          axis.text.y = element_text(size = 12, face = "bold", hjust = 1),
+          axis.title.x = element_text(face = "bold"),
+          axis.title.y = element_text(face = "bold"),
           aspect.ratio = aspect.ratio) 
 
           
@@ -863,7 +867,7 @@ lmer.plot.emmeans.contrasts <- function(emmeans.data,
     contrast <- contrasts_data$contrast[i]
     p_value <- contrasts_data$p.value[i]
     # Format p-value
-    p_value_formatted <- ifelse(p_value < 0.001, "< 0.001", sprintf("= %.3f", p_value))
+    p_value_formatted <- ifelse(p_value < 0.0001, "< 0.0001", sprintf("= %.4f", p_value))
     annotations[i] <- paste0("p ", p_value_formatted)#,  " (", contrast, ")")
     
     # Debugging statements
@@ -1008,9 +1012,12 @@ lmer.plot.emmeans.contrasts <- function(emmeans.data,
             panel.grid.major.x = element_blank(),                                      
             panel.grid.major.y = element_line(color = "grey80", linewidth = 0.5),      
             panel.grid.minor = element_blank(),
-            axis.text.x = element_text(angle = 45, hjust = 1),
+            axis.text.x = element_text(size = 12, face = "bold", angle = 45, hjust = 1),
+            axis.text.y = element_text(size = 12, face = "bold", hjust = 1),
             axis.line = element_line(color = "black", linewidth = 0.5),
             plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+            axis.title.x = element_text(face = "bold"),
+            axis.title.y = element_text(face = "bold"),
             aspect.ratio = aspect_ratio) 
     
     # Display the plot
@@ -1075,7 +1082,7 @@ glmmTB.plot.emmeans.contrasts <- function(emmeans.data,
     contrast <- contrasts_data$contrast[i]
     p_value <- contrasts_data$p.value[i]
     # Format p-value
-    p_value_formatted <- ifelse(p_value < 0.001, "< 0.001", sprintf("= %.3f", p_value))
+    p_value_formatted <- ifelse(p_value < 0.0001, "< 0.0001", sprintf("= %.4f", p_value))
     annotations[i] <- paste0("p ", p_value_formatted)#,  " (", contrast, ")")
     
     # Debugging statements
@@ -1204,9 +1211,12 @@ glmmTB.plot.emmeans.contrasts <- function(emmeans.data,
             panel.grid.major.x = element_blank(),                                      
             panel.grid.major.y = element_line(color = "grey80", linewidth = 0.5),      
             panel.grid.minor = element_blank(),
-            axis.text.x = element_text(angle = 45, hjust = 1),
+            axis.text.x = element_text(size = 12, face = "bold", angle = 45, hjust = 1),
+            axis.text.y = element_text(size = 12, face = "bold", hjust = 1),
             axis.line = element_line(color = "black", linewidth = 0.5),
             plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+            axis.title.x = element_text(face = "bold"),
+            axis.title.y = element_text(face = "bold"),
             aspect.ratio = aspect_ratio) 
     
     # Display the plot
