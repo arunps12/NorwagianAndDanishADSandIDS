@@ -463,6 +463,17 @@ glmmTB.full.reduced.null.compare <- function(fullmformula,
 boot.ci.predict.lmer <- function(m, optimizer, maxfun, data, pred.data, reqcol, centercol = NULL, nboots = NULL, link = "identity", keep.boots = FALSE) {
   
   
+  # Load required packages
+  if (!requireNamespace("lme4", quietly = TRUE)) {
+    stop("The 'lme4' package is required but is not installed.")
+  }
+  if (!requireNamespace("boot", quietly = TRUE)) {
+    stop("The 'boot' package is required but is not installed.")
+  }
+  
+  # Load the libraries
+  library(lme4)
+  library(boot)
   # Initialize a counter singular fit
   #warning_counter <- 0
   singular_fit_counter <- 0
@@ -559,10 +570,21 @@ boot.ci.predict.lmer <- function(m, optimizer, maxfun, data, pred.data, reqcol, 
   # If keep.boots = FALSE, return only the summary predictions
   return(data.frame(pred.data, fit = prediction, lwr = lower_ci, upr = upper_ci))
 }
+
 # 4. Function for bootstrappin glmmtmb
 boot.ci.predict.glmmTMB <- function(m, data, pred.data, reqcol, centercol = NULL, nboots = NULL, keep.boots = FALSE) {
   
+  # Load required libraries
+  if (!requireNamespace("glmmTMB", quietly = TRUE)) {
+    stop("The 'glmmTMB' package is required but is not installed.")
+  }
+  if (!requireNamespace("boot", quietly = TRUE)) {
+    stop("The 'boot' package is required but is not installed.")
+  }
   
+  # Load the libraries
+  library(glmmTMB)
+  library(boot)
   # Initialize a counter singular fit
   #warning_counter <- 0
   singular_fit_counter <- 0
@@ -787,15 +809,15 @@ factor.interaction.group.ci.plot <- function(plot.data,
 }
 
 # 6. compute contrasts function
-compute_contrasts <- function(margian_means, compute_pairwise = FALSE, custom_contrasts = NULL, ...) {
+compute_contrasts <- function(margian_means, compute_pairwise = FALSE, custom_contrasts = NULL, adjust_method = "none", ...) {
   
   # Apply contrasts
   if (!is.null(custom_contrasts)) {
     # Use custom contrasts provided by the user
-    contrast_results <- emmeans::contrast(margian_means, method = custom_contrasts)
+    contrast_results <- emmeans::contrast(margian_means, method = custom_contrasts, adjust = adjust_method)
   } else if (compute_pairwise) {
     # Compute default pairwise contrasts
-    contrast_results <- emmeans::contrast(margian_means, method = "pairwise")
+    contrast_results <- emmeans::contrast(margian_means, method = "pairwise",  adjust = adjust_method)
   } else {
     # No contrasts computed
     contrast_results <- NULL
@@ -867,7 +889,7 @@ lmer.plot.emmeans.contrasts <- function(emmeans.data,
     contrast <- contrasts_data$contrast[i]
     p_value <- contrasts_data$p.value[i]
     # Format p-value
-    p_value_formatted <- ifelse(p_value < 0.0001, "< 0.0001", sprintf("= %.4f", p_value))
+    p_value_formatted <- ifelse(p_value < 0.001, "< 0.001", sprintf("= %.4f", p_value))
     annotations[i] <- paste0("p ", p_value_formatted)#,  " (", contrast, ")")
     
     # Debugging statements
@@ -1082,7 +1104,7 @@ glmmTB.plot.emmeans.contrasts <- function(emmeans.data,
     contrast <- contrasts_data$contrast[i]
     p_value <- contrasts_data$p.value[i]
     # Format p-value
-    p_value_formatted <- ifelse(p_value < 0.0001, "< 0.0001", sprintf("= %.4f", p_value))
+    p_value_formatted <- ifelse(p_value < 0.001, "< 0.001", sprintf("= %.4f", p_value))
     annotations[i] <- paste0("p ", p_value_formatted)#,  " (", contrast, ")")
     
     # Debugging statements
