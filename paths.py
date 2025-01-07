@@ -130,3 +130,7 @@ create_dir(stat_plot_dir)
 # Plot vowel-based measures dir
 plot_dir = os.path.join(basedir, 'PlotVowelBasedMeasures')
 create_dir(plot_dir)
+
+# combined measures dir
+all_measures = os.path.join(basedir, 'CombinedMeasures')
+create_dir(all_measures)
