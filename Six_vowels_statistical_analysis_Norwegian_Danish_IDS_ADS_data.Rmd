@@ -1,0 +1,1584 @@
+---
+title: "statistical_analysis_Norwegian_Danish_IDS_ADS_data"
+author: "Arun Prakash Singh"
+date: "2024-09-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+# 1. Load necessary libraries
+```{r}
+library(readxl)
+library(lme4)
+library(lmerTest)
+library(ggplot2)
+library(dplyr)
+library(crayon)
+library(merTools)
+library(boot)
+library(splines)
+library(stringr)
+library(cowplot)
+library(car)
+library(glmmTMB)
+library(DHARMa)
+```
+# 2. Vowels sapce Area
+
+# 2.1. Norwegian Formant
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "formant_no_ADS_6_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "formant_no_IDS_6_bordervowels_M.xlsx"))
+
+
+output.2.1 <- lmer.full.reduced.null.compare(ConvexHullArea ~ Register + AgeMonth + (1+Register|spkid), 
+                        optimizer = "nloptwrap", 
+                         maxfun = 100000,
+                        fullm = FALSE,
+                         redm = TRUE, 
+                         redmformula = ConvexHullArea ~ Register + AgeMonth + (1|spkid), 
+                         nullm = TRUE, 
+                         nullmformula = ConvexHullArea ~ AgeMonth  + (1|spkid),
+                         df_no_ADS, df_no_IDS)
+```
+
+
+```{r}
+pred.data.2.1 <- boot.ci.predict.lmer(
+  m = output.2.1$model,
+  optimizer = output.2.1$optimizer,
+  maxfun = output.2.1$maxfun,
+  data = output.2.1$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.2.1$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth"),
+  nboots = 1000,
+  link = "identity",
+ keep.boots = FALSE
+)
+```
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.2.1$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_space_area = mean(ConvexHullArea), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+area_no_formant_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.2.1, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_space_area",  
+  plot.data.col.group = "spkid_n",       
+  x.labs = "Register", 
+  y.labs = "Vowel Space Area (kHz^2)", 
+  x.discrete.labels = c("ADS", "IDS"), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(30, 800),
+  div = 1000,
+  scale.size.range = c(min(range(plot.data$n)), max(range(plot.data$n))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey90",    
+  color.gradient.high = "grey30",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = NULL,
+  y.ax.transformation = TRUE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(100, 800, by = 100),
+  aspect.ratio = 2,
+  title = 'Norwegian',
+  legend = FALSE,
+  p_value = "p = 0.1266"
+  
+)
+print(area_no_formant_plot)
+```
+
+# 2.2. Danish Formant
+```{r}
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "formant_da_ADS_6_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "formant_da_IDS_6_bordervowels.xlsx"))
+
+output.2.2 <- lmer.full.reduced.null.compare(ConvexHullArea ~ Register + AgeMonth + (1+Register|spkid), 
+                        optimizer = "nloptwrap", 
+                         maxfun = 100000,
+                        fullm = FALSE,
+                         redm = TRUE, 
+                         redmformula = ConvexHullArea ~ Register + AgeMonth + (1|spkid), 
+                         nullm = TRUE, 
+                         nullmformula = ConvexHullArea ~ AgeMonth  + (1|spkid),
+                         df_da_ADS, df_da_IDS)
+```
+
+```{r}
+pred.data.2.2 <- boot.ci.predict.lmer(
+  m = output.2.2$model,
+  optimizer = output.2.2$optimizer,
+  maxfun = output.2.2$maxfun,
+  data = output.2.2$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.2.2$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth"),
+  nboots = 1000,
+  link = "identity",
+ keep.boots = FALSE
+)
+
+```
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.2.2$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_space_area = mean(ConvexHullArea), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+#plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+area_da_formant_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.2.2, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_space_area",  
+  plot.data.col.group = "spkid",       
+  x.labs = "Register", 
+  y.labs = "Vowel Space Area (kHz^2)", 
+  x.discrete.labels = c("ADS", "IDS"), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(30, 800),
+  div = 1000,
+  scale.size.range = c(min(range(plot.data$n)), max(range(plot.data$n))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey60",    
+  color.gradient.high = "grey10",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = NULL,
+  y.ax.transformation = FALSE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(100, 800, by = 100),
+  aspect.ratio = 2,
+  title = "Danish",
+  legend = FALSE,
+  p_value = "p = 0.6076"
+  
+)
+print(area_da_formant_plot)
+```
+# 2.3. Norwegian MFCC
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "mfcc_no_ADS_6_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "mfcc_no_IDS_6_bordervowels_M.xlsx"))
+
+output.2.3 <- lmer.full.reduced.null.compare(ConvexHullArea ~ Register + AgeMonth + (1+Register|spkid), 
+                        optimizer = "nloptwrap", 
+                         maxfun = 100000,
+                        fullm = TRUE,
+                         redm = FALSE, 
+                         redmformula = ConvexHullArea ~ Register + AgeMonth + (1|spkid), 
+                         nullm = TRUE, 
+                         nullmformula = ConvexHullArea ~ AgeMonth  + (1|spkid),
+                         df_no_ADS, df_no_IDS)
+```
+
+```{r}
+pred.data.2.3 <- boot.ci.predict.lmer(
+  m = output.2.3$model,
+  optimizer = output.2.3$optimizer,
+  maxfun = output.2.3$maxfun,
+  data = output.2.3$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.2.3$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth"),
+  nboots = 1000,
+  link = "identity",
+ keep.boots = FALSE
+)
+```
+
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.2.3$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_space_area = mean(ConvexHullArea), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+area_no_mfcc_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.2.3, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_space_area",  
+  plot.data.col.group = "spkid_n",       
+  x.labs = "Register", 
+  y.labs = "Vowel Space Area (unit^2)", 
+  x.discrete.labels = c("ADS", "IDS"), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 30),
+  div = 1000,
+  scale.size.range = c(1, 5),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey60",    
+  color.gradient.high = "grey10",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = NULL,
+  y.ax.transformation = FALSE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 30, by = 5),
+  aspect.ratio = 2,
+  title = 'Norwegian',
+  legend = FALSE,
+  p_value = "p < 0.001"
+  
+)
+print(area_no_mfcc_plot)
+```
+# 2.4. Danish MFCC
+```{r}
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "mfcc_da_ADS_6_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "mfcc_da_IDS_6_bordervowels.xlsx"))
+
+output.2.4 <- lmer.full.reduced.null.compare(ConvexHullArea ~ Register + AgeMonth + (1+Register|spkid), 
+                        optimizer = "nloptwrap", 
+                         maxfun = 100000,
+                        fullm = FALSE,
+                         redm = TRUE, 
+                         redmformula = ConvexHullArea ~ Register + AgeMonth + (1|spkid), 
+                         nullm = TRUE, 
+                         nullmformula = ConvexHullArea ~ AgeMonth  + (1|spkid),
+                         df_da_ADS, df_da_IDS)
+```
+
+```{r}
+pred.data.2.4 <- boot.ci.predict.lmer(
+  m = output.2.4$model,
+  optimizer = output.2.4$optimizer,
+  maxfun = output.2.4$maxfun,
+  data = output.2.4$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.2.4$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth"),
+  nboots = 1000,
+  link = "identity",
+ keep.boots = FALSE
+)
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.2.4$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_space_area = mean(ConvexHullArea), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+#plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+area_da_mfcc_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.2.4, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_space_area",  
+  plot.data.col.group = "spkid",       
+  x.labs = "Register", 
+  y.labs = "Vowel Space Area (unit^2)", 
+  x.discrete.labels = c("ADS", "IDS"), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 30),
+  div = 1000,
+  scale.size.range = c(min(range(plot.data$n)), max(range(plot.data$n))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey60",    
+  color.gradient.high = "grey10",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = NULL,
+  y.ax.transformation = TRUE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 30, by = 5),
+  aspect.ratio = 2,
+  title = 'Danish',
+  legend = FALSE,
+  p_value = "p = 0.6767"
+  
+  
+)
+print(area_da_mfcc_plot)
+```
+
+# 3. Vowel Variability
+
+# 3.1. Norwegian Formant
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "formant_no_ADS_6_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "formant_no_IDS_6_bordervowels_M.xlsx"))
+
+
+output.3.1 <- lmer.full.reduced.null.compare(variability ~ Register + AgeMonth + (1+Register|spkid) + (1+Register| IPA), 
+                        optimizer = "nloptwrap", 
+                         maxfun = 100000,
+                        fullm = FALSE,
+                         redm = TRUE, 
+                         redmformula = variability ~ Register + AgeMonth + (1|spkid) + (1| IPA) , 
+                         nullm = TRUE, 
+                         nullmformula = variability ~ AgeMonth  +  (1|spkid) + (1| IPA),
+                         df_no_ADS, df_no_IDS)
+```
+
+
+```{r}
+pred.data.3.1 <- boot.ci.predict.lmer(
+  m = output.3.1$model,
+  optimizer = output.3.1$optimizer,
+  maxfun = output.3.1$maxfun,
+  data = output.3.1$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.3.1$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth", "IPA"),
+  nboots = 1000,
+  link = "identity",
+ keep.boots = FALSE
+)
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.3.1$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_variability = mean(variability), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+variability_no_formant_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.3.1, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_variability",  
+  plot.data.col.group = "spkid_n",       
+  x.labs = "Register", 
+  y.labs = "Vowel variability (kHz^2)", 
+  x.discrete.labels = c("ADS", "IDS"), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 50),
+  div = 1000,
+  scale.size.range = c(log(min(range(plot.data$n))), log(max(range(plot.data$n)))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey60",    
+  color.gradient.high = "grey10",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = "log",
+  y.ax.transformation = TRUE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 50, by = 10),
+  aspect.ratio = 2,
+  title = 'Norwegian',
+  legend = FALSE,
+  p_value = "p < 0.001"
+)
+print(variability_no_formant_plot)
+```
+# 3.2 Danish Formant
+```{r}
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "formant_da_ADS_6_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "formant_da_IDS_6_bordervowels.xlsx"))
+
+
+output.3.2 <- lmer.full.reduced.null.compare(variability ~ Register + AgeMonth + (1+Register|spkid) + (1+Register| IPA), 
+                        optimizer = "nloptwrap", 
+                         maxfun = 100000,
+                        fullm = FALSE,
+                         redm = TRUE, 
+                         redmformula = variability ~ Register + AgeMonth + (1|spkid) + (1| IPA), 
+                         nullm = TRUE, 
+                         nullmformula = variability ~ AgeMonth  + (1|spkid) + (1| IPA),
+                         df_da_ADS, df_da_IDS)
+```
+
+```{r}
+pred.data.3.2 <- boot.ci.predict.lmer(
+  m = output.3.2$model,
+  optimizer = output.3.2$optimizer,
+  maxfun = output.3.2$maxfun,
+  data = output.3.2$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.3.2$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth", "IPA"),
+  nboots = 1000,
+  link = "identity",
+ keep.boots = FALSE
+)
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.3.2$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_variability = mean(variability), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+#plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+variability_da_formant_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.3.2, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_variability",  
+  plot.data.col.group = "spkid",       
+  x.labs = "Register", 
+  y.labs = "Vowel variability (kHz^2)", 
+  x.discrete.labels = c("ADS", "IDS"), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 50),
+  div = 1000,
+  scale.size.range = c(log(min(range(plot.data$n))), log(max(range(plot.data$n)))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey60",    
+  color.gradient.high = "grey10",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = "log",
+  y.ax.transformation = TRUE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 50, by = 10),
+  aspect.ratio = 2,
+  title = 'Danish',
+  legend = FALSE,
+  p_value = "p = 0.2789"
+)
+print(variability_da_formant_plot)
+```
+# 3.3. Norwegian MFCC
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "mfcc_no_ADS_6_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "mfcc_no_IDS_6_bordervowels_M.xlsx"))
+
+
+output.3.3 <- lmer.full.reduced.null.compare(variability ~ Register + AgeMonth + (1+Register|spkid) + (1+Register| IPA), 
+                        optimizer = "nloptwrap", 
+                         maxfun = 100000,
+                        fullm = FALSE,
+                         redm = TRUE, 
+                         redmformula = variability ~ Register + AgeMonth + (1|spkid) + (1| IPA) , 
+                         nullm = TRUE, 
+                         nullmformula = variability ~ AgeMonth  +  (1|spkid) + (1| IPA),
+                         df_no_ADS, df_no_IDS)
+```
+
+```{r}
+pred.data.3.3 <- boot.ci.predict.lmer(
+  m = output.3.3$model,
+  optimizer = output.3.3$optimizer,
+  maxfun = output.3.3$maxfun,
+  data = output.3.3$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.3.3$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth", "IPA"),
+  nboots = 1000,
+  link = "identity",
+ keep.boots = FALSE
+)
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.3.3$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_variability = mean(variability), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+variability_no_mfcc_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.3.3, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_variability",  
+  plot.data.col.group = "spkid_n",       
+  x.labs = "Register", 
+  y.labs = "Vowel variability (unit^2)", 
+  x.discrete.labels = c("ADS", "IDS"), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 5),
+  div = 1000,
+  scale.size.range = c(log(min(range(plot.data$n))), log(max(range(plot.data$n)))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey60",    
+  color.gradient.high = "grey10",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = "log",
+  y.ax.transformation = TRUE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 5, by = 1),
+  aspect.ratio = 2,
+  title = 'Norwegian',
+  legend = FALSE,
+  p_value = "p < 0.001"
+)
+print(variability_no_mfcc_plot)
+```
+# 3.4. Danish MFCC
+```{r}
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "mfcc_da_ADS_6_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "mfcc_da_IDS_6_bordervowels.xlsx"))
+
+
+output.3.4 <- lmer.full.reduced.null.compare(variability ~ Register + AgeMonth + (1+Register|spkid) + (1+Register| IPA), 
+                        optimizer = "nloptwrap", 
+                         maxfun = 100000,
+                        fullm = FALSE,
+                         redm = TRUE, 
+                         redmformula = variability ~ Register + AgeMonth + (1|spkid) + (1| IPA) , 
+                         nullm = TRUE, 
+                         nullmformula = variability ~ AgeMonth  +  (1|spkid) + (1| IPA),
+                         df_da_ADS, df_da_IDS)
+```
+
+```{r}
+pred.data.3.4 <- boot.ci.predict.lmer(
+  m = output.3.4$model,
+  optimizer = output.3.4$optimizer,
+  maxfun = output.3.4$maxfun,
+  data = output.3.4$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.3.4$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth", "IPA"),
+  nboots = 1000,
+  link = "identity",
+ keep.boots = FALSE
+)
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.3.4$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_variability = mean(variability), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+#plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+variability_da_mfcc_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.3.4, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_variability",  
+  plot.data.col.group = "spkid",       
+  x.labs = "Register", 
+  y.labs = "Vowel variability (unit^2)", 
+  x.discrete.labels = c("ADS", "IDS"), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 5),
+  div = 1000,
+  scale.size.range = c(log(min(range(plot.data$n))), log(max(range(plot.data$n)))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey60",    
+  color.gradient.high = "grey10",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = "log",
+  y.ax.transformation = TRUE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 5, by = 1),
+  aspect.ratio = 2,
+  title = 'Danish',
+  legend = FALSE,
+  p_value = "p = 0.1003"
+)
+print(variability_da_mfcc_plot)
+```
+# 4. Separability
+#4.1. Norwegian Formant
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "formant_no_ADS_6_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "formant_no_IDS_6_bordervowels_M.xlsx"))
+
+output.4.1 <- glmmTB.full.reduced.null.compare(fullmformula = separability ~ Register + AgeMonth + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = TRUE,
+                                             redm = FALSE, 
+                                             redmformula = separability ~ Register + AgeMonth + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula = separability ~ AgeMonth + (1|spkid),
+                                             data_list = list(df_no_ADS, df_no_IDS))
+```
+
+```{r}
+pred.data.4.1 <- boot.ci.predict.glmmTMB(
+  m = output.4.1$full_model,
+  data = output.4.1$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.4.1$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth"),
+  nboots = 1000,
+ keep.boots = FALSE
+)
+
+```
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.4.1$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_sep = mean(separability), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+sep_no_formant_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.4.1, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_sep",  
+  plot.data.col.group = "spkid_n",       
+  x.labs = "Register", 
+  y.labs = "Separability (pillai score)", 
+  x.discrete.labels = c("ADS", "IDS"), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 1),
+  div = NULL,
+  scale.size.range = c(min(range(plot.data$n)), max(range(plot.data$n))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey90",    
+  color.gradient.high = "grey30",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = NULL,
+  y.ax.transformation = FALSE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 1, by = 0.25),
+  aspect.ratio = 2,
+  title = 'Norwegian',
+  legend = FALSE,
+  p_value = "p < 0.001"
+  
+)
+print(sep_no_formant_plot)
+```
+#4.2. Danish Formant
+```{r}
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "formant_da_ADS_6_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "formant_da_IDS_6_bordervowels.xlsx"))
+
+output.4.2 <- glmmTB.full.reduced.null.compare(fullmformula = separability ~ Register + AgeMonth + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = FALSE,
+                                             redm = TRUE, 
+                                             redmformula = separability ~ Register + AgeMonth + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula = separability ~ AgeMonth + (1|spkid),
+                                             data_list = list(df_da_ADS, df_da_IDS))
+```
+
+
+```{r}
+pred.data.4.2 <- boot.ci.predict.glmmTMB(
+  m = output.4.2$reduced_model,
+  data = output.4.2$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.4.2$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth"),
+  nboots = 1000,
+ keep.boots = FALSE
+)
+
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.4.2$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_sep = mean(separability), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+#plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+sep_da_formant_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.4.2, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_sep",  
+  plot.data.col.group = "spkid",       
+  x.labs = "Register", 
+  y.labs = "Separability (pillai score)", 
+  x.discrete.labels = c("ADS", "IDS"), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 1),
+  div = NULL,
+  scale.size.range = c(min(range(plot.data$n)), max(range(plot.data$n))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey90",    
+  color.gradient.high = "grey30",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = NULL,
+  y.ax.transformation = FALSE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 1, by = 0.25),
+  aspect.ratio = 2,
+  title = 'Danish',
+  legend = FALSE,
+  p_value = "p = 0.05639"
+  
+)
+print(sep_da_formant_plot)
+```
+# 4.3. Norwegian MFCC
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "mfcc_no_ADS_6_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "mfcc_no_IDS_6_bordervowels_M.xlsx"))
+
+
+
+output.4.3 <- glmmTB.full.reduced.null.compare(fullmformula = separability ~ Register + AgeMonth + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                            zi_formula = ~0,
+                                             fullm = TRUE,
+                                             redm = FALSE, 
+                                             redmformula = separability ~ Register + AgeMonth + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula = separability ~ AgeMonth + (1+Register|spkid),
+                                             data_list = list(df_no_ADS, df_no_IDS))
+```
+
+```{r}
+pred.data.4.3 <- boot.ci.predict.glmmTMB(
+  m = output.4.3$full_model,
+  data = output.4.3$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.4.3$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth"),
+  nboots = 1000,
+ keep.boots = FALSE
+)
+
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.4.3$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_sep = mean(separability), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+sep_no_mfcc_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.4.3, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_sep",  
+  plot.data.col.group = "spkid_n",       
+  x.labs = "Register", 
+  y.labs = "Separability (pillai score)", 
+  x.discrete.labels = c("ADS", "IDS"), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 1),
+  div = NULL,
+  scale.size.range = c(min(range(plot.data$n)), max(range(plot.data$n))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey90",    
+  color.gradient.high = "grey30",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = NULL,
+  y.ax.transformation = FALSE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 1, by = 0.25),
+  aspect.ratio = 2,
+  title = 'Norwegian',
+  legend = FALSE,
+  p_value = "p < 0.001"
+  
+)
+print(sep_no_mfcc_plot)
+```
+
+# 4.4 . Danish MFCC
+```{r}
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "mfcc_da_ADS_6_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "mfcc_da_IDS_6_bordervowels.xlsx"))
+
+output.4.4 <- glmmTB.full.reduced.null.compare(fullmformula = separability ~ Register + AgeMonth + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = FALSE,
+                                             redm = TRUE, 
+                                             redmformula = separability ~ Register + AgeMonth + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula = separability ~ AgeMonth + (1|spkid),
+                                             data_list = list(df_da_ADS, df_da_IDS))
+```
+
+```{r}
+pred.data.4.4 <- boot.ci.predict.glmmTMB(
+  m = output.4.4$reduced_model,
+  data = output.4.4$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.4.4$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth"),
+  nboots = 1000,
+ keep.boots = FALSE
+)
+
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.4.4$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_sep = mean(separability), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+#plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+sep_da_mfcc_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.4.4, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_sep",  
+  plot.data.col.group = "spkid",       
+  x.labs = "Register", 
+  y.labs = "Separability (pillai score)", 
+  x.discrete.labels = c("ADS", "IDS"), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 1),
+  div = NULL,
+  scale.size.range = c(min(range(plot.data$n)), max(range(plot.data$n))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey90",    
+  color.gradient.high = "grey30",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = NULL,
+  y.ax.transformation = FALSE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 1, by = 0.25),
+  aspect.ratio = 2,
+  title = 'Danish',
+  legend = FALSE,
+  p_value = "p = 0.531"
+  
+)
+print(sep_da_mfcc_plot)
+```
+
+# 5. xgboost Generalisability
+# 5.1 Norwegian Formant 
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost","formant_no_ADS_6_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost", "formant_no_IDS_6_bordervowels_M.xlsx"))
+df_no_ADS$F1_Score <- as.numeric(df_no_ADS$F1_Score)
+df_no_IDS$F1_Score <- as.numeric(df_no_IDS$F1_Score)
+
+output.5.1 <- glmmTB.full.reduced.null.compare(fullmformula = F1_Score ~ Register + AgeMonth + train_samples + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = TRUE,
+                                             redm = FALSE, 
+                                             redmformula = F1_Score ~ Register + AgeMonth + train_samples + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula = F1_Score ~ AgeMonth + (1|spkid),
+                                             data_list = list(df_no_ADS, df_no_IDS))
+```
+
+```{r}
+pred.data.5.1 <- boot.ci.predict.glmmTMB(
+  m = output.5.1$full_model,
+  data = output.5.1$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.5.1$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth", 'train_samples'),
+  nboots = 1000,
+ keep.boots = FALSE
+)
+
+```
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.5.1$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_f1 = mean(F1_Score), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+gen_xgboost_no_formant_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.5.1, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_f1",  
+  plot.data.col.group = "spkid_n",       
+  x.labs = "", 
+  y.labs = "XGBoost:Generalisability (F1_score)", 
+  x.discrete.labels = c("", ""), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 1),
+  div = NULL,
+  scale.size.range = c(min(range(plot.data$n)), max(range(plot.data$n))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey90",    
+  color.gradient.high = "grey30",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = NULL,
+  y.ax.transformation = FALSE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 1, by = 0.25),
+  aspect.ratio = 2,
+  title = 'Norwegian',
+  legend = FALSE,
+  p_value = "p < 0.001"
+)
+print(gen_xgboost_no_formant_plot)
+```
+
+#5.2. Danish Formant
+```{r}
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost","formant_da_ADS_6_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost", "formant_da_IDS_6_bordervowels.xlsx"))
+df_da_ADS$F1_Score <- as.numeric(df_da_ADS$F1_Score)
+df_da_IDS$F1_Score <- as.numeric(df_da_IDS$F1_Score)
+output.5.2 <- glmmTB.full.reduced.null.compare(fullmformula = F1_Score ~ Register + AgeMonth + train_samples + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = FALSE,
+                                             redm = TRUE, 
+                                             redmformula = F1_Score ~ Register + AgeMonth + train_samples + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula = F1_Score ~ AgeMonth + train_samples + (1|spkid),
+                                             data_list = list(df_da_ADS, df_da_IDS))
+```
+
+```{r}
+pred.data.5.2 <- boot.ci.predict.glmmTMB(
+  m = output.5.2$reduced_model,
+  data = output.5.2$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.5.2$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth", 'train_samples'),
+  nboots = 1000,
+ keep.boots = FALSE
+)
+
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.5.2$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_f1 = mean(F1_Score), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+#plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+gen_xgboost_da_formant_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.5.2, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_f1",  
+  plot.data.col.group = "spkid",       
+  x.labs = "", 
+  y.labs = "XGBoost:Generalisability (F1_score)", 
+  x.discrete.labels = c("", ""), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 1),
+  div = NULL,
+  scale.size.range = c(min(range(plot.data$n)), max(range(plot.data$n))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey90",    
+  color.gradient.high = "grey30",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = NULL,
+  y.ax.transformation = FALSE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 1, by = 0.25),
+  aspect.ratio = 2,
+  title = 'Danish',
+  legend = FALSE,
+  p_value = "p < 0.001"
+  
+)
+print(gen_xgboost_da_formant_plot)
+```
+
+#5.3. Norwegian MFCC
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost","mfcc_no_ADS_6_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost", "mfcc_no_IDS_6_bordervowels_M.xlsx"))
+df_no_ADS$F1_Score <- as.numeric(df_no_ADS$F1_Score)
+df_no_IDS$F1_Score <- as.numeric(df_no_IDS$F1_Score)
+output.5.3 <- glmmTB.full.reduced.null.compare(fullmformula = F1_Score ~ Register + AgeMonth + train_samples + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = TRUE,
+                                             redm = FALSE, 
+                                             redmformula = F1_Score ~ Register + AgeMonth + train_samples + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula = F1_Score ~ AgeMonth + train_samples + (1|spkid),
+                                             data_list = list(df_no_ADS, df_no_IDS))
+```
+
+```{r}
+pred.data.5.3 <- boot.ci.predict.glmmTMB(
+  m = output.5.3$full_model,
+  data = output.5.3$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.5.3$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth", 'train_samples'),
+  nboots = 1000,
+ keep.boots = FALSE
+)
+
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.5.3$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_f1 = mean(F1_Score), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+gen_xgboost_no_mfcc_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.5.3, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_f1",  
+  plot.data.col.group = "spkid_n",       
+  x.labs = "", 
+  y.labs = "XGBoost:Generalisability (F1_score)", 
+  x.discrete.labels = c("", ""), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 1),
+  div = NULL,
+  scale.size.range = c(min(range(plot.data$n)), max(range(plot.data$n))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey90",    
+  color.gradient.high = "grey30",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = NULL,
+  y.ax.transformation = FALSE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 1, by = 0.25),
+  aspect.ratio = 2,
+  title = 'Norwegian',
+  legend = FALSE,
+  p_value = "p < 0.001"
+  
+)
+print(gen_xgboost_no_mfcc_plot)
+```
+# 5.4. Danish MFCC 
+```{r}
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost","mfcc_da_ADS_6_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost", "mfcc_da_IDS_6_bordervowels.xlsx"))
+df_da_ADS$F1_Score <- as.numeric(df_da_ADS$F1_Score)
+df_da_IDS$F1_Score <- as.numeric(df_da_IDS$F1_Score)
+output.5.4 <- glmmTB.full.reduced.null.compare(fullmformula = F1_Score ~ Register + AgeMonth + train_samples + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = FALSE,
+                                             redm = TRUE, 
+                                             redmformula = F1_Score ~ Register + AgeMonth + train_samples + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula = F1_Score ~ AgeMonth + train_samples + (1|spkid),
+                                             data_list = list(df_da_ADS, df_da_IDS))
+```
+
+```{r}
+pred.data.5.4 <- boot.ci.predict.glmmTMB(
+  m = output.5.4$reduced_model,
+  data = output.5.4$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.5.4$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth", 'train_samples'),
+  nboots = 1000,
+ keep.boots = FALSE
+)
+
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.5.4$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_f1 = mean(F1_Score), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+#plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+gen_xgboost_da_mfcc_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.5.4, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_f1",  
+  plot.data.col.group = "spkid",       
+  x.labs = "", 
+  y.labs = "XGBoost:Generalisability (F1_score)", 
+  x.discrete.labels = c("", ""), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 1),
+  div = NULL,
+  scale.size.range = c(min(range(plot.data$n)), max(range(plot.data$n))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey90",    
+  color.gradient.high = "grey30",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = NULL,
+  y.ax.transformation = FALSE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 1, by = 0.25),
+  aspect.ratio = 2,
+  title = 'Danish',
+  legend = FALSE,
+  p_value = "p < 0.001"
+  
+)
+print(gen_xgboost_da_mfcc_plot)
+```
+# 6 CNN Generalisability
+# 6.1. Norwegian Formant
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN","formant_no_ADS_6_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN", "formant_no_IDS_6_bordervowels_M.xlsx"))
+df_no_ADS$F1_Score <- as.numeric(df_no_ADS$F1_Score)
+df_no_IDS$F1_Score <- as.numeric(df_no_IDS$F1_Score)
+
+output.6.1 <- glmmTB.full.reduced.null.compare(fullmformula = F1_Score ~ Register + AgeMonth + train_samples + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = TRUE,
+                                             redm = FALSE, 
+                                             redmformula = F1_Score ~ Register + AgeMonth + train_samples + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula = F1_Score ~ AgeMonth + train_samples + (1|spkid),
+                                             data_list = list(df_no_ADS, df_no_IDS))
+```
+
+```{r}
+pred.data.6.1 <- boot.ci.predict.glmmTMB(
+  m = output.6.1$full_model,
+  data = output.6.1$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.6.1$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth", 'train_samples'),
+  nboots = 1000,
+ keep.boots = FALSE
+)
+
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.6.1$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_f1 = mean(F1_Score), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+gen_CNN_no_formant_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.6.1, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_f1",  
+  plot.data.col.group = "spkid_n",       
+  x.labs = "Register", 
+  y.labs = "CNN:Generalisability (F1_score)", 
+  x.discrete.labels = c("ADS", "IDS"), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 1),
+  div = NULL,
+  scale.size.range = c(min(range(plot.data$n)), max(range(plot.data$n))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey90",    
+  color.gradient.high = "grey30",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = NULL,
+  y.ax.transformation = FALSE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 1, by = 0.25),
+  aspect.ratio = 2,
+  title = '',
+  legend = FALSE,
+  p_value = "p < 0.001"
+  
+)
+print(gen_CNN_no_formant_plot)
+```
+# 6.2. Danish Formant
+```{r}
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN","formant_da_ADS_6_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN", "formant_da_IDS_6_bordervowels.xlsx"))
+df_da_ADS$F1_Score <- as.numeric(df_da_ADS$F1_Score)
+df_da_IDS$F1_Score <- as.numeric(df_da_IDS$F1_Score)
+
+output.6.2 <- glmmTB.full.reduced.null.compare(fullmformula = F1_Score ~ Register + AgeMonth + train_samples + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = FALSE,
+                                             redm = TRUE, 
+                                             redmformula = F1_Score ~ Register + AgeMonth + train_samples + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula = F1_Score ~ AgeMonth + train_samples + (1|spkid),
+                                             data_list = list(df_da_ADS, df_da_IDS))
+```
+
+```{r}
+pred.data.6.2 <- boot.ci.predict.glmmTMB(
+  m = output.6.2$reduced_model,
+  data = output.6.2$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.6.2$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth", 'train_samples'),
+  nboots = 1000,
+ keep.boots = FALSE
+)
+
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.6.2$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_f1 = mean(F1_Score), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+#plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+gen_CNN_da_formant_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.6.2, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_f1",  
+  plot.data.col.group = "spkid",       
+  x.labs = "Register", 
+  y.labs = "CNN:Generalisability (F1_score)", 
+  x.discrete.labels = c("ADS", "IDS"), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 1),
+  div = NULL,
+  scale.size.range = c(min(range(plot.data$n)), max(range(plot.data$n))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey90",    
+  color.gradient.high = "grey30",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = NULL,
+  y.ax.transformation = FALSE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 1, by = 0.25),
+  aspect.ratio = 2,
+  title = '',
+  legend = FALSE,
+  p_value = "p < 0.001"
+  
+)
+print(gen_CNN_da_formant_plot)
+```
+
+# 6.3. Norwegian MFCC
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN","mfcc_no_ADS_6_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN", "mfcc_no_IDS_6_bordervowels_M.xlsx"))
+df_no_ADS$F1_Score <- as.numeric(df_no_ADS$F1_Score)
+df_no_IDS$F1_Score <- as.numeric(df_no_IDS$F1_Score)
+
+output.6.3 <- glmmTB.full.reduced.null.compare(fullmformula = F1_Score ~ Register + AgeMonth + train_samples + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = FALSE,
+                                             redm = TRUE, 
+                                             redmformula = F1_Score ~ Register + AgeMonth + train_samples + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula = F1_Score ~ AgeMonth + train_samples + (1|spkid),
+                                             data_list = list(df_no_ADS, df_no_IDS))
+```
+
+```{r}
+pred.data.6.3 <- boot.ci.predict.glmmTMB(
+  m = output.6.3$reduced_model,
+  data = output.6.3$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.6.3$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth", 'train_samples'),
+  nboots = 1000,
+ keep.boots = FALSE
+)
+
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.6.3$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_f1 = mean(F1_Score), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+gen_CNN_no_mfcc_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.6.3, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_f1",  
+  plot.data.col.group = "spkid_n",       
+  x.labs = "Register", 
+  y.labs = "CNN:Generalisability (F1_score)", 
+  x.discrete.labels = c("ADS", "IDS"), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 1),
+  div = NULL,
+  scale.size.range = c(min(range(plot.data$n)), max(range(plot.data$n))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey90",    
+  color.gradient.high = "grey30",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = NULL,
+  y.ax.transformation = FALSE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 1, by = 0.25),
+  aspect.ratio = 2,
+  title = '',
+  legend = FALSE,
+  p_value = "p < 0.001"
+  
+)
+print(gen_CNN_no_mfcc_plot)
+```
+
+# 6.4. Danish MFCC
+```{r}
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN","mfcc_da_ADS_6_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN", "mfcc_da_IDS_6_bordervowels.xlsx"))
+df_da_ADS$F1_Score <- as.numeric(df_da_ADS$F1_Score)
+df_da_IDS$F1_Score <- as.numeric(df_da_IDS$F1_Score)
+
+output.6.4 <- glmmTB.full.reduced.null.compare(fullmformula = F1_Score ~ Register + AgeMonth + train_samples + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = FALSE,
+                                             redm = TRUE, 
+                                             redmformula = F1_Score ~ Register + AgeMonth + train_samples + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula = F1_Score ~ AgeMonth + train_samples + (1|spkid),
+                                             data_list = list(df_da_ADS, df_da_IDS))
+```
+
+
+```{r}
+pred.data.6.4 <- boot.ci.predict.glmmTMB(
+  m = output.6.4$reduced_model,
+  data = output.6.4$fit_data,
+  pred.data = expand.grid(Register = levels(as.factor(output.6.4$fit_data$Register))),
+  reqcol  = c("Register"),
+  centercol = c("AgeMonth", 'train_samples'),
+  nboots = 1000,
+ keep.boots = FALSE
+)
+
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.6.4$fit_data %>%
+  group_by(Register, spkid) %>%
+  summarise(mean_f1 = mean(F1_Score), n = n(), .groups = "drop")# Using .groups to avoid the warning
+
+# Extract numeric part of spk_id
+#plot.data$spkid_n <- str_extract(plot.data$spkid, "[0-9]+")
+
+# Plot the results with fitted lines and error bars
+gen_CNN_da_mfcc_plot <- factor.interaction.group.ci.plot(
+  plot.data = plot.data, 
+  coefs = pred.data.6.4, 
+  plot.data.col.x = "Register",          
+  plot.data.col.y = "mean_f1",  
+  plot.data.col.group = "spkid",       
+  x.labs = "Register", 
+  y.labs = "CNN:Generalisability (F1_score)", 
+  x.discrete.labels = c("ADS", "IDS"), 
+  x.group.pos = c(1, 2), 
+  y.lim = c(0, 1),
+  div = NULL,
+  scale.size.range = c(min(range(plot.data$n)), max(range(plot.data$n))),  
+  size.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1), 
+  color.gradient.low = "grey90",    
+  color.gradient.high = "grey30",   
+  color.breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),
+  size.scaling = NULL,
+  y.ax.transformation = FALSE,
+  inv_y_transform_fun = function(x) { exp(x) - 1 },
+  y.breaks = seq(0, 1, by = 0.25),
+  aspect.ratio = 2,
+  title = '',
+  legend = FALSE,
+  p_value = "p < 0.001"
+  
+)
+print(gen_CNN_da_mfcc_plot)
+```
+# 6. combining Norwegian and Danish plot and save
+# 6.1 Area Formant
+```{r}
+p1 <- area_no_formant_plot
+p2 <- area_da_formant_plot + 
+  theme(axis.title.y = element_blank(),  # Remove y-axis label
+        axis.text.y = element_blank(),   # Remove y-axis text
+        axis.ticks.y = element_blank())  # Remove y-axis ticks
+
+# Combine side-by-side
+combined_plot <- plot_grid(p1, p2, labels = "") + theme(plot.margin = margin(t = 0, r = 0, b = 0, l = 0, unit = "mm"))
+ggsave(file.path(getwd(), "StatPlots", "Area_no_da_Formant_six_bordervowels.pdf"), plot = combined_plot, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Area_no_da_Formant_six_bordervowels.jpg"), plot = combined_plot, height = 5)
+```
+# 6.2 Area MFCC
+```{r}
+p1 <- area_no_mfcc_plot
+p2 <- area_da_mfcc_plot + 
+  theme(axis.title.y = element_blank(),  # Remove y-axis label
+        axis.text.y = element_blank(),   # Remove y-axis text
+        axis.ticks.y = element_blank())  # Remove y-axis ticks
+
+# Combine side-by-side
+combined_plot <- plot_grid(p1, p2, labels = "") + theme(plot.margin = margin(t = 0, r = 0, b = 0, l = 0, unit = "mm"))
+ggsave(file.path(getwd(), "StatPlots", "Area_no_da_MFCC_six_bordervowels.pdf"), plot = combined_plot, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Area_no_da_MFCC_six_bordervowels.jpg"), plot = combined_plot, height = 5)
+
+```
+# 6.3. Variablity Formant
+```{r}
+p1 <- variability_no_formant_plot
+p2 <- variability_da_formant_plot + 
+  theme(axis.title.y = element_blank(),  # Remove y-axis label
+        axis.text.y = element_blank(),   # Remove y-axis text
+        axis.ticks.y = element_blank())  # Remove y-axis ticks
+
+# Combine side-by-side
+combined_plot <- plot_grid(p1, p2, labels = "") + theme(plot.margin = margin(t = 0, r = 0, b = 0, l = 0, unit = "mm"))
+ggsave(file.path(getwd(), "StatPlots", "Variability_no_da_Formant_six_bordervowels.pdf"), plot = combined_plot, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Variability_no_da_Formant_six_bordervowels.jpg"), plot = combined_plot, height = 5)
+
+```
+
+# 6.4. Variablity MFCC
+```{r}
+p1 <- variability_no_mfcc_plot
+p2 <- variability_da_mfcc_plot + 
+  theme(axis.title.y = element_blank(),  # Remove y-axis label
+        axis.text.y = element_blank(),   # Remove y-axis text
+        axis.ticks.y = element_blank())  # Remove y-axis ticks
+
+# Combine side-by-side
+combined_plot <- plot_grid(p1, p2, labels = "") + theme(plot.margin = margin(t = 0, r = 0, b = 0, l = 0, unit = "mm"))
+ggsave(file.path(getwd(), "StatPlots", "Variability_no_da_MFCC_six_bordervowels.pdf"), plot = combined_plot, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Variability_no_da_MFCC_six_bordervowels.jpg"), plot = combined_plot, height = 5)
+
+
+```
+
+# 6.5. Separability Formant
+```{r}
+p1 <- sep_no_formant_plot
+p2 <- sep_da_formant_plot + 
+  theme(axis.title.y = element_blank(),  # Remove y-axis label
+        axis.text.y = element_blank(),   # Remove y-axis text
+        axis.ticks.y = element_blank())  # Remove y-axis ticks
+
+# Combine side-by-side
+combined_plot <- plot_grid(p1, p2, labels = "") + theme(plot.margin = margin(t = 0, r = 0, b = 0, l = 0, unit = "mm"))
+ggsave(file.path(getwd(), "StatPlots", "separability_no_da_Formant_six_bordervowels.pdf"), plot = combined_plot, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "separability_no_da_Formant_six_bordervowels.jpg"), plot = combined_plot, height = 5)
+
+
+```
+# 6.6. Separability MFCC
+```{r}
+p1 <- sep_no_mfcc_plot
+p2 <- sep_da_mfcc_plot + 
+  theme(axis.title.y = element_blank(),  # Remove y-axis label
+        axis.text.y = element_blank(),   # Remove y-axis text
+        axis.ticks.y = element_blank())  # Remove y-axis ticks
+
+# Combine side-by-side
+combined_plot <- plot_grid(p1, p2, labels = "") + theme(plot.margin = margin(t = 0, r = 0, b = 0, l = 0, unit = "mm"))
+ggsave(file.path(getwd(), "StatPlots", "separability_no_da_MFCC_six_bordervowels.pdf"), plot = combined_plot, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "separability_no_da_MFCC_six_bordervowels.jpg"), plot = combined_plot, height = 5)
+
+
+```
+# 6.7. Generalisability Formant
+```{r}
+p1 <- gen_xgboost_no_formant_plot
+p2 <- gen_xgboost_da_formant_plot + 
+  theme(axis.title.y = element_blank(),  # Remove y-axis label
+        axis.text.y = element_blank(),   # Remove y-axis text
+        axis.ticks.y = element_blank())  # Remove y-axis ticks
+p3 <- gen_CNN_no_formant_plot
+p4 <- gen_CNN_da_formant_plot + 
+  theme(axis.title.y = element_blank(),  # Remove y-axis label
+        axis.text.y = element_blank(),   # Remove y-axis text
+        axis.ticks.y = element_blank())  # Remove y-axis ticks
+
+# Combine side-by-side
+combined_plot <- plot_grid(p1, p2, p3, p4, nrow = 2, ncol = 2,labels = "") + theme(plot.margin = margin(t = 0, r = 0, b = 0, l = 0, unit = "mm"))
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_xgboost_CNN_no_da_Formant_six_bordervowels.pdf"), plot = combined_plot, height = 7)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_xgboost_CNN_no_da_Formant_six_bordervowels.jpg"), plot = combined_plot, height = 7)
+
+
+```
+
+# 6.8. Generalisability MFCC
+```{r}
+p1 <- gen_xgboost_no_mfcc_plot
+p2 <- gen_xgboost_da_mfcc_plot + 
+  theme(axis.title.y = element_blank(),  # Remove y-axis label
+        axis.text.y = element_blank(),   # Remove y-axis text
+        axis.ticks.y = element_blank())  # Remove y-axis ticks
+p3 <- gen_CNN_no_mfcc_plot
+p4 <- gen_CNN_da_mfcc_plot + 
+  theme(axis.title.y = element_blank(),  # Remove y-axis label
+        axis.text.y = element_blank(),   # Remove y-axis text
+        axis.ticks.y = element_blank())  # Remove y-axis ticks
+
+# Combine side-by-side
+combined_plot <- plot_grid(p1, p2, p3, p4, nrow = 2, ncol = 2,labels = "") + theme(plot.margin = margin(t = 0, r = 0, b = 0, l = 0, unit = "mm"))
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_xgboost_CNN_no_da_mfcc_six_bordervowels.pdf"), plot = combined_plot, height = 7)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_xgboost_CNN_no_da_mfcc_six_bordervowels.jpg"), plot = combined_plot, height = 7)
+
+
+```
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
