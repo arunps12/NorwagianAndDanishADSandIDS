@@ -1,0 +1,3099 @@
+---
+title: "statistical_analysis_Norwegian_Danish_IDS_ADS_data"
+author: "Arun Prakash Singh"
+date: "2024-09-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+# 1. Load necessary libraries
+```{r}
+library(readxl)
+library(lme4)
+library(lmerTest)
+library(ggplot2)
+library(dplyr)
+library(crayon)
+library(merTools)
+library(boot)
+library(splines)
+library(stringr)
+library(cowplot)
+library(car)
+library(glmmTMB)
+library(DHARMa)
+library(emmeans)
+```
+# 2. Vowels sapce Area
+
+# 2.1. Formant
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "formant_no_ADS_3_bordervowels_M.xlsx"))
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "formant_no_IDS_3_bordervowels_M.xlsx"))
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "formant_da_ADS_3_bordervowels.xlsx"))
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "formant_da_IDS_3_bordervowels.xlsx"))
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())   
+
+# Calculate summary statistics for each session_id
+#session_stats <- df_no_ADS %>%
+  #group_by(session_id) %>%
+  #summarise(
+    #mean_value = mean(ConvexHullArea, na.rm = TRUE)/1000,  # mean 
+    #sd_value = sd(ConvexHullArea, na.rm = TRUE)/1000,       # Standard deviation
+    #max_value = max(ConvexHullArea, na.rm = TRUE)/1000,     # Maximum value
+    #min_value = min(ConvexHullArea, na.rm = TRUE)/1000,     # Minimum value
+    #num_observations = n(),                              # Number of observations
+    #num_unique_spk_id = n_distinct(spkid)                # Number of unique speaker IDs
+  #)
+
+# View the result
+#print(session_stats)
+
+
+output.2.1 <- lmer.full.reduced.null.compare(ConvexHullArea ~ Register*Language + AgeMonth + (1+Register|spkid) , 
+                        optimizer = "nloptwrap", 
+                         maxfun = 100000,
+                        fullm = TRUE,
+                         redm = FALSE, 
+                         redmformula = NULL, #ConvexHullArea ~ Register + AgeMonth + (1|spkid), 
+                         nullm = FALSE, 
+                         nullmformula = ConvexHullArea ~  AgeMonth + (1+Register|spkid) ,
+                        data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS),
+                        marginal_means = TRUE,
+                        specs = ~Register*Language
+                        )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.2.1 <- compute_contrasts(output.2.1$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.2.1$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(ConvexHullArea), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+three_vowels_formant_vowel_space_area <- lmer.plot.emmeans.contrasts(emmeans.data = output.2.1$emmeans, 
+                       contrasts.data = contrast_results.2.1$contrasts, 
+                       raw_data = plot.data, 
+                       y.ax.transformation = TRUE,
+                       inv_y_transform_fun = function(x) { exp(x) - 1 }, 
+                       div = 1000000,
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "Vowel Space Area (kHz^2)",
+                       y_lim = c(0, 0.6),
+                      scale_size_range = c(1, 5),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,0.4, by = 0.1),
+                      size_scaling = NULL,
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+
+```
+
+
+# 2.2. MFCC
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "mfcc_no_ADS_3_bordervowels_M.xlsx"))
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "mfcc_no_IDS_3_bordervowels_M.xlsx"))
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "mfcc_da_ADS_3_bordervowels.xlsx"))
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "mfcc_da_IDS_3_bordervowels.xlsx"))
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())   
+
+
+output.2.2 <- lmer.full.reduced.null.compare(ConvexHullArea ~ Register*Language + AgeMonth +  (1+Register|spkid) , 
+                        optimizer = "nloptwrap", 
+                         maxfun = 100000,
+                        fullm = TRUE,
+                         redm = FALSE, 
+                         redmformula = NULL, #ConvexHullArea ~ Register + AgeMonth + (1|spkid), 
+                         nullm = FALSE, 
+                         nullmformula = NULL,
+                        data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS),
+                        marginal_means = TRUE,
+                        specs = ~Register*Language
+                        )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.2.2 <- compute_contrasts(output.2.2$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.2.2$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(ConvexHullArea), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+three_vowels_mfcc_vowel_space_area <- lmer.plot.emmeans.contrasts(emmeans.data = output.2.2$emmeans, 
+                       contrasts.data = contrast_results.2.2$contrasts, 
+                       raw_data = plot.data, 
+                       y.ax.transformation = TRUE,
+                       inv_y_transform_fun = function(x) { exp(x) - 1 }, 
+                       div = 1000000,
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "Vowel Space Area (kunit^2)",
+                       y_lim = c(0, 0.040),
+                      scale_size_range = c(1, 5),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,0.020, by = 0.010),
+                      size_scaling = NULL,
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+```
+
+#3. Variability
+#3.1. Formant
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "formant_no_ADS_3_bordervowels_M.xlsx"))
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "formant_no_IDS_3_bordervowels_M.xlsx"))
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "formant_da_ADS_3_bordervowels.xlsx"))
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "formant_da_IDS_3_bordervowels.xlsx"))
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())   
+
+
+output.3.1 <- lmer.full.reduced.null.compare(variability ~ Register*Language + AgeMonth +  (1+Register|spkid) + (1+Register|IPA) , 
+                        optimizer = "nloptwrap", 
+                         maxfun = 100000,
+                        fullm = TRUE,
+                         redm = FALSE, 
+                         redmformula = NULL, #ConvexHullArea ~ Register + AgeMonth + (1|spkid), 
+                         nullm = FALSE, 
+                         nullmformula = NULL,
+                        data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS),
+                        marginal_means = TRUE,
+                        specs = ~Register*Language
+                        )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.3.1 <- compute_contrasts(output.3.1$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.3.1$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(variability), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+three_vowels_formant_variability <- lmer.plot.emmeans.contrasts(emmeans.data = output.3.1$emmeans, 
+                       contrasts.data = contrast_results.3.1$contrasts, 
+                       raw_data = plot.data, 
+                       y.ax.transformation = TRUE,
+                       inv_y_transform_fun = function(x) { exp(x) - 1 }, 
+                       div = 1000000,
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "Variability (kHz^2)",
+                       y_lim = c(0, 0.120),
+                      scale_size_range = c(1, 6),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,0.080, by = 0.020),
+                      size_scaling = 'log',
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+```
+# 3.2. MFCC
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "mfcc_no_ADS_3_bordervowels_M.xlsx"))
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "mfcc_no_IDS_3_bordervowels_M.xlsx"))
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "mfcc_da_ADS_3_bordervowels.xlsx"))
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "mfcc_da_IDS_3_bordervowels.xlsx"))
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())   
+
+
+output.3.2 <- lmer.full.reduced.null.compare(variability ~ Register*Language + AgeMonth + (1+Register|spkid) + (1+Register|IPA) , 
+                        optimizer = "nloptwrap", 
+                         maxfun = 100000,
+                        fullm = TRUE,
+                         redm = FALSE, 
+                         redmformula = NULL, #ConvexHullArea ~ Register + AgeMonth + (1|spkid), 
+                         nullm = FALSE, 
+                         nullmformula = NULL,
+                        data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS),
+                        marginal_means = TRUE,
+                        specs = ~Register*Language
+                        )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.3.2 <- compute_contrasts(output.3.2$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.3.2$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(variability), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+three_vowels_mfcc_variability <- lmer.plot.emmeans.contrasts(emmeans.data = output.3.2$emmeans, 
+                       contrasts.data = contrast_results.3.2$contrasts, 
+                       raw_data = plot.data, 
+                       y.ax.transformation = TRUE,
+                       inv_y_transform_fun = function(x) { exp(x) - 1 }, 
+                       div = 1000000,
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "Variability (kunit^2)",
+                       y_lim = c(0, 0.008),
+                      scale_size_range = c(1, 6),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,0.005, by = 0.002),
+                      size_scaling = 'log',
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+```
+# 4. Separability
+#4.1. Formant
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "formant_no_ADS_3_bordervowels_M.xlsx"))
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "formant_no_IDS_3_bordervowels_M.xlsx"))
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "formant_da_ADS_3_bordervowels.xlsx"))
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "formant_da_IDS_3_bordervowels.xlsx"))
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())   
+
+
+output.4.1 <- glmmTB.full.reduced.null.compare(fullmformula = separability ~ Register*Language + AgeMonth  + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = TRUE,
+                                             redm = FALSE, 
+                                             redmformula = separability ~ Register*Language + AgeMonth + session_id + (1|spkid), 
+                                             nullm = FALSE, 
+                                             nullmformula = NULL,
+                                             data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS), 
+                                           marginal_means = TRUE,
+                                          specs = ~Register*Language
+                                          )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.4.1 <- compute_contrasts(output.4.1$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.4.1$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(separability), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+three_vowels_formant_separability <- glmmTB.plot.emmeans.contrasts(emmeans.data = output.4.1$emmeans, 
+                       contrasts.data = contrast_results.4.1$contrasts, 
+                       raw_data = plot.data, 
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "Separability (pillai score)",
+                       y_lim = c(0, 1.5),
+                      scale_size_range = c(1, 5),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,1, by = 0.2),
+                      size_scaling = NULL,
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+
+```
+
+#4.2. MFCC
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "formant_no_ADS_3_bordervowels_M.xlsx"))
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "mfcc_no_IDS_3_bordervowels_M.xlsx"))
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "mfcc_da_ADS_3_bordervowels.xlsx"))
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "mfcc_da_IDS_3_bordervowels.xlsx"))
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())   
+
+
+output.4.2 <- glmmTB.full.reduced.null.compare(fullmformula = separability ~ Register*Language + AgeMonth + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = TRUE,
+                                             redm = FALSE, 
+                                             redmformula = separability ~ Register*Language + AgeMonth + session_id + (1|spkid), 
+                                             nullm = FALSE, 
+                                             nullmformula = NULL,
+                                             data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS), 
+                                           marginal_means = TRUE,
+                                          specs = ~Register*Language
+                                          )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.4.2 <- compute_contrasts(output.4.2$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.4.2$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(separability), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+three_vowels_mfcc_separability <- glmmTB.plot.emmeans.contrasts(emmeans.data = output.4.2$emmeans, 
+                       contrasts.data = contrast_results.4.2$contrasts, 
+                       raw_data = plot.data, 
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "Separability (pillai score)",
+                       y_lim = c(0, 1.5),
+                      scale_size_range = c(1, 5),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,1, by = 0.2),
+                      size_scaling = NULL,
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+
+
+```
+# 5. xgboost Generalisability
+# 5.1 Formant 
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost","formant_no_ADS_3_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost", "formant_no_IDS_3_bordervowels_M.xlsx"))
+df_no_ADS$F1_Score <- as.numeric(df_no_ADS$F1_Score)
+df_no_IDS$F1_Score <- as.numeric(df_no_IDS$F1_Score)
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost","formant_da_ADS_3_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost", "formant_da_IDS_3_bordervowels.xlsx"))
+df_da_ADS$F1_Score <- as.numeric(df_da_ADS$F1_Score)
+df_da_IDS$F1_Score <- as.numeric(df_da_IDS$F1_Score)
+
+
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+
+
+output.5.1 <- glmmTB.full.reduced.null.compare(fullmformula = F1_Score ~ Register*Language + AgeMonth +  train_samples + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = TRUE,
+                                             redm = FALSE, 
+                                             redmformula = F1_Score ~ Register*Language + AgeMonth + session_id + train_samples + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula = F1_Score ~ Register*Language + AgeMonth + (1+Register|spkid),
+                                             data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS), 
+                                           marginal_means = TRUE,
+                                          specs = ~Register*Language
+                                          )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.5.1 <- compute_contrasts(output.5.1$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.5.1$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(F1_Score), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+three_vowels_formant_generalisability <- glmmTB.plot.emmeans.contrasts(emmeans.data = output.5.1$emmeans, 
+                       contrasts.data = contrast_results.5.1$contrasts, 
+                       raw_data = plot.data, 
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "XGBoost:Generalisability (F1_score)",
+                       y_lim = c(0, 1.5),
+                      scale_size_range = c(1, 5),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,1, by = 0.2),
+                      size_scaling = NULL,
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+```
+# 5.2.MFCC
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost","mfcc_no_ADS_3_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost", "mfcc_no_IDS_3_bordervowels_M.xlsx"))
+df_no_ADS$F1_Score <- as.numeric(df_no_ADS$F1_Score)
+df_no_IDS$F1_Score <- as.numeric(df_no_IDS$F1_Score)
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost","mfcc_da_ADS_3_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost", "mfcc_da_IDS_3_bordervowels.xlsx"))
+df_da_ADS$F1_Score <- as.numeric(df_da_ADS$F1_Score)
+df_da_IDS$F1_Score <- as.numeric(df_da_IDS$F1_Score)
+
+
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+
+
+output.5.2 <- glmmTB.full.reduced.null.compare(fullmformula = F1_Score ~ Register*Language + AgeMonth +  train_samples + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = TRUE,
+                                             redm = FALSE, 
+                                             redmformula = F1_Score ~ Register*Language + AgeMonth + session_id + train_samples + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula =  F1_Score ~ Register*Language + AgeMonth + (1+Register|spkid),
+                                             data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS), 
+                                           marginal_means = TRUE,
+                                          specs = ~Register*Language
+                                          )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.5.2 <- compute_contrasts(output.5.2$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.5.2$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(F1_Score), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+three_vowels_mfcc_generalisability <- glmmTB.plot.emmeans.contrasts(emmeans.data = output.5.2$emmeans, 
+                       contrasts.data = contrast_results.5.2$contrasts, 
+                       raw_data = plot.data, 
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "XGBoost:Generalisability (F1_score)",
+                       y_lim = c(0, 1.5),
+                      scale_size_range = c(1, 5),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,1, by = 0.2),
+                      size_scaling = NULL,
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+```
+
+
+# 6. CNN Generalisability
+# 6.1. Formant
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN","formant_no_ADS_3_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN", "formant_no_IDS_3_bordervowels_M.xlsx"))
+df_no_ADS$F1_Score <- as.numeric(df_no_ADS$F1_Score)
+df_no_IDS$F1_Score <- as.numeric(df_no_IDS$F1_Score)
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN","formant_da_ADS_3_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN", "formant_da_IDS_3_bordervowels.xlsx"))
+df_da_ADS$F1_Score <- as.numeric(df_da_ADS$F1_Score)
+df_da_IDS$F1_Score <- as.numeric(df_da_IDS$F1_Score)
+
+
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+
+
+output.6.1 <- glmmTB.full.reduced.null.compare(fullmformula = F1_Score ~ Register*Language + AgeMonth + train_samples + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = TRUE,
+                                             redm = FALSE, 
+                                             redmformula = F1_Score ~ Register*Language + AgeMonth + session_id + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula = F1_Score ~ Register*Language + AgeMonth + (1+Register|spkid),
+                                             data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS), 
+                                           marginal_means = TRUE,
+                                          specs = ~Register*Language
+                                          )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.6.1 <- compute_contrasts(output.6.1$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.6.1$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(F1_Score), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+CNN_three_vowels_formant_generalisability <- glmmTB.plot.emmeans.contrasts(emmeans.data = output.6.1$emmeans, 
+                       contrasts.data = contrast_results.6.1$contrasts, 
+                       raw_data = plot.data, 
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "CNN:Generalisability (F1_score)",
+                       y_lim = c(0, 1.5),
+                      scale_size_range = c(1, 5),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,1, by = 0.2),
+                      size_scaling = NULL,
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+```
+# 6.2. MFCC
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN","mfcc_no_ADS_3_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN", "mfcc_no_IDS_3_bordervowels_M.xlsx"))
+df_no_ADS$F1_Score <- as.numeric(df_no_ADS$F1_Score)
+df_no_IDS$F1_Score <- as.numeric(df_no_IDS$F1_Score)
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN","mfcc_da_ADS_3_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN", "mfcc_da_IDS_3_bordervowels.xlsx"))
+df_da_ADS$F1_Score <- as.numeric(df_da_ADS$F1_Score)
+df_da_IDS$F1_Score <- as.numeric(df_da_IDS$F1_Score)
+
+
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+
+
+output.6.2 <- glmmTB.full.reduced.null.compare(fullmformula = F1_Score ~ Register*Language + AgeMonth + train_samples +  (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = TRUE,
+                                             redm = FALSE, 
+                                             redmformula = F1_Score ~ Register*Language + AgeMonth + session_id + train_samples + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula = F1_Score ~ Register*Language + AgeMonth +  (1+Register|spkid),
+                                             data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS), 
+                                           marginal_means = TRUE,
+                                          specs = ~Register*Language
+                                          )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.6.2 <- compute_contrasts(output.6.2$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.6.2$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(F1_Score), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+CNN_three_vowels_mfcc_generalisability <- glmmTB.plot.emmeans.contrasts(emmeans.data = output.6.2$emmeans, 
+                       contrasts.data = contrast_results.6.2$contrasts, 
+                       raw_data = plot.data, 
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "CNN:Generalisability (F1_score)",
+                       y_lim = c(0, 1.5),
+                      scale_size_range = c(1, 5),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,1, by = 0.2),
+                      size_scaling = NULL,
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+```
+# 7. Save Plots
+```{r}
+ggsave(file.path(getwd(), "StatPlots", "Area_no_da_Formant_three_corner_vowels.pdf"), plot = three_vowels_formant_vowel_space_area, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Area_no_da_MFCC_three_corner_vowels.pdf"), plot = three_vowels_mfcc_vowel_space_area, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Variability_no_da_Formant_three_corner_vowels.pdf"), plot = three_vowels_formant_variability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Variability_no_da_MFCC_three_corner_vowels.pdf"), plot = three_vowels_mfcc_variability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "separability_no_da_Formant_three_corner_vowels.pdf"), plot = three_vowels_formant_separability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "separability_no_da_MFCC_three_corner_vowels.pdf"), plot = three_vowels_mfcc_separability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_xgboost_no_da_Formant_three_corner_vowels.pdf"), plot = three_vowels_formant_generalisability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_xgboost_no_da_mfcc_three_corner_vowels.pdf"), plot = three_vowels_mfcc_generalisability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_CNN_no_da_Formant_three_corner_vowels.pdf"), plot = CNN_three_vowels_formant_generalisability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_CNN_no_da_mfcc_three_corner_vowels.pdf"), plot = CNN_three_vowels_mfcc_generalisability, height = 5)
+
+ggsave(file.path(getwd(), "StatPlots", "Area_no_da_Formant_three_corner_vowels.jpg"), plot = three_vowels_formant_vowel_space_area, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Area_no_da_MFCC_three_corner_vowels.jpg"), plot = three_vowels_mfcc_vowel_space_area, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Variability_no_da_Formant_three_corner_vowels.jpg"), plot = three_vowels_formant_variability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Variability_no_da_MFCC_three_corner_vowels.jpg"), plot = three_vowels_mfcc_variability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "separability_no_da_Formant_three_corner_vowels.jpg"), plot = three_vowels_formant_separability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "separability_no_da_MFCC_three_corner_vowels.jpg"), plot = three_vowels_mfcc_separability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_xgboost_no_da_Formant_three_corner_vowels.jpg"), plot = three_vowels_formant_generalisability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_xgboost_no_da_mfcc_three_corner_vowels.jpg"), plot = three_vowels_mfcc_generalisability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_CNN_no_da_Formant_three_corner_vowels.jpg"), plot = CNN_three_vowels_formant_generalisability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_CNN_no_da_mfcc_three_corner_vowels.jpg"), plot = CNN_three_vowels_mfcc_generalisability, height = 5)
+```
+
+
+## Beta regression model for F1 scores
+
+```{r}
+library(betareg)
+library(MASS)
+library(fitdistrplus)
+library(betareg)
+
+
+# Standardize predictors
+#data$z_Area <- scale(data$ConvexHullArea)
+#data$z_Variability <- scale(data$variability)
+
+# Adjust F1 Score if it contains 0 or 1
+#data$Adjusted_F1 <- (data$F1_Score * (nrow(data) - 1) + 0.5) / nrow(data)
+
+```
+
+```{r}
+data = read_excel(file.path(getwd(), "CombinedMeasures", "formant_XGBoost_3_corner_vowels.xlsx"))
+```
+
+```{r}
+# Fit beta, norm, gamma distribution
+fitbeta <- fitdist(data$F1_Score, "beta", method = "mle")
+fitnorm <- fitdist(data$F1_Score, "norm", method = "mle")
+fitgamma <- fitdist(data$F1_Score, "gamma", method = "mle")
+
+# Summary of fit
+summary(fitbeta)
+summary(fitnorm)
+summary(fitgamma)
+
+# Plot fitted distribution
+#plot(fit)
+
+
+```
+
+```{r}
+# Fit Beta Regression Model
+# Load the package
+
+
+# Standardize predictors
+data$z_Area <- scale(data$ConvexHullArea)
+data$z_Variability <- scale(data$variability)
+
+# Add Polynomial Terms
+data$z_Area2 <- data$z_Area^2
+data$z_Variability2 <- data$z_Variability^2
+
+# Adjust F1 Score if it contains 0 or 1
+data$Adjusted_F1 <- (data$F1_Score * (nrow(data) - 1) + 0.5) / nrow(data)
+
+# Fit Beta Regression Model with Polynomial Terms
+model <- betareg(
+  Adjusted_F1 ~ z_Area + z_Variability + z_Area:z_Variability + z_Area2 + 
+    z_Variability2,
+  data = data
+)
+
+# Model Summary
+summary(model)
+
+
+
+```
+
+```{r}
+# Define constants and functions for inverse z-transformation
+mean_area <- mean(data$ConvexHullArea)  # Replace 'Area' with the original area column name
+sd_area <- sd(data$ConvexHullArea)
+
+# Define a sequence for z_Area (varying z-transformed area)
+z_area_seq <- seq(min(data$z_Area), max(data$z_Area), length.out = 100)
+
+# Hold variability constant (mean of z_Variability)
+z_variability_mean <- mean(data$z_Variability)
+
+# Create a data frame for predictions
+prediction_data <- data.frame(
+  z_Area = z_area_seq,
+  z_Variability = z_variability_mean,
+  z_Area2 = z_area_seq^2,
+  z_Variability2 = z_variability_mean^2,
+  z_Area.z_Variability = z_area_seq * z_variability_mean
+)
+
+# Predict F1 scores using the model
+predicted_f1 <- predict(model, newdata = prediction_data, type = "response")
+
+# Inverse z-transform area for the x-axis
+original_area <- z_area_seq * sd_area + mean_area
+
+prediction_plot_data <- data.frame(
+  original_area = original_area,
+  predicted_f1 = predicted_f1
+)
+
+# Plot data points and predicted values
+library(ggplot2)
+
+ggplot(data, aes(x = ConvexHullArea, y = Adjusted_F1)) +  # Replace 'Area' with the original area column
+  geom_point(alpha = 0.5, color = "blue", size = 2) +  # Data points
+  geom_line(data = prediction_plot_data, aes(x = original_area, y = predicted_f1), color = "red", size = 1) +  # Predicted line
+  labs(
+    x = "Area (original scale)",
+    y = "F1 Score",
+    title = "F1 Score as a Function of Area",
+    subtitle = "Variability held constant at mean"
+  ) +
+  theme_minimal()
+```
+
+
+```{r}
+data = read_excel(file.path(getwd(), "CombinedMeasures", "mfcc_XGBoost_3_corner_vowels.xlsx"))
+```
+
+```{r}
+# Fit beta, norm, gamma distribution
+fitbeta <- fitdist(data$F1_Score, "beta", method = "mle")
+fitnorm <- fitdist(data$F1_Score, "norm", method = "mle")
+fitgamma <- fitdist(data$F1_Score, "gamma", method = "mle")
+
+# Summary of fit
+summary(fitbeta)
+summary(fitnorm)
+summary(fitgamma)
+
+# Plot fitted distribution
+#plot(fit)
+
+
+```
+
+```{r}
+# Fit Beta Regression Model
+# Load the package
+library(betareg)
+
+# Standardize predictors
+data$z_Area <- scale(data$ConvexHullArea)
+data$z_Variability <- scale(data$variability)
+
+# Add Polynomial Terms
+data$z_Area2 <- data$z_Area^2
+data$z_Variability2 <- data$z_Variability^2
+
+# Adjust F1 Score if it contains 0 or 1
+data$Adjusted_F1 <- (data$F1_Score * (nrow(data) - 1) + 0.5) / nrow(data)
+
+# Fit Beta Regression Model with Polynomial Terms
+model <- betareg(
+  Adjusted_F1 ~ z_Area + z_Variability + z_Area:z_Variability + z_Area2 + 
+    z_Variability2,
+  data = data
+)
+
+# Model Summary
+summary(model)
+
+
+
+```
+
+```{r}
+# Define constants and functions for inverse z-transformation
+mean_area <- mean(data$ConvexHullArea)  # Replace 'Area' with the original area column name
+sd_area <- sd(data$ConvexHullArea)
+
+# Define a sequence for z_Area (varying z-transformed area)
+z_area_seq <- seq(min(data$z_Area), max(data$z_Area), length.out = 100)
+
+# Hold variability constant (mean of z_Variability)
+z_variability_mean <- mean(data$z_Variability)
+
+# Create a data frame for predictions
+prediction_data <- data.frame(
+  z_Area = z_area_seq,
+  z_Variability = z_variability_mean,
+  z_Area2 = z_area_seq^2,
+  z_Variability2 = z_variability_mean^2,
+  z_Area.z_Variability = z_area_seq * z_variability_mean
+)
+
+# Predict F1 scores using the model
+predicted_f1 <- predict(model, newdata = prediction_data, type = "response")
+
+# Inverse z-transform area for the x-axis
+original_area <- z_area_seq * sd_area + mean_area
+
+prediction_plot_data <- data.frame(
+  original_area = original_area,
+  predicted_f1 = predicted_f1
+)
+
+# Plot data points and predicted values
+library(ggplot2)
+
+ggplot(data, aes(x = ConvexHullArea, y = Adjusted_F1)) +  # Replace 'Area' with the original area column
+  geom_point(alpha = 0.5, color = "blue", size = 2) +  # Data points
+  geom_line(data = prediction_plot_data, aes(x = original_area, y = predicted_f1), color = "red", size = 1) +  # Predicted line
+  labs(
+    x = "Area (original scale)",
+    y = "F1 Score",
+    title = "F1 Score as a Function of Area",
+    subtitle = "Variability held constant at mean"
+  ) +
+  theme_minimal()
+```
+
+
+```{r}
+data = read_excel(file.path(getwd(), "CombinedMeasures", "formant_CNN_3_corner_vowels.xlsx"))
+```
+
+```{r}
+# Fit beta, norm, gamma distribution
+fitbeta <- fitdist(data$F1_Score, "beta", method = "mle")
+fitnorm <- fitdist(data$F1_Score, "norm", method = "mle")
+fitgamma <- fitdist(data$F1_Score, "gamma", method = "mle")
+
+# Summary of fit
+summary(fitbeta)
+summary(fitnorm)
+summary(fitgamma)
+
+# Plot fitted distribution
+#plot(fit)
+
+
+```
+
+```{r}
+# Fit Beta Regression Model
+# Load the package
+library(betareg)
+
+# Standardize predictors
+data$z_Area <- scale(data$ConvexHullArea)
+data$z_Variability <- scale(data$variability)
+
+# Add Polynomial Terms
+data$z_Area2 <- data$z_Area^2
+data$z_Variability2 <- data$z_Variability^2
+
+# Adjust F1 Score if it contains 0 or 1
+data$Adjusted_F1 <- (data$F1_Score * (nrow(data) - 1) + 0.5) / nrow(data)
+
+# Fit Beta Regression Model with Polynomial Terms
+model <- betareg(
+  Adjusted_F1 ~ z_Area + z_Variability + z_Area:z_Variability + z_Area2 + 
+    z_Variability2,
+  data = data
+)
+
+# Model Summary
+summary(model)
+
+
+
+```
+
+```{r}
+# Define constants and functions for inverse z-transformation
+mean_area <- mean(data$ConvexHullArea)  # Replace 'Area' with the original area column name
+sd_area <- sd(data$ConvexHullArea)
+
+# Define a sequence for z_Area (varying z-transformed area)
+z_area_seq <- seq(min(data$z_Area), max(data$z_Area), length.out = 100)
+
+# Hold variability constant (mean of z_Variability)
+z_variability_mean <- mean(data$z_Variability)
+
+# Create a data frame for predictions
+prediction_data <- data.frame(
+  z_Area = z_area_seq,
+  z_Variability = z_variability_mean,
+  z_Area2 = z_area_seq^2,
+  z_Variability2 = z_variability_mean^2,
+  z_Area.z_Variability = z_area_seq * z_variability_mean
+)
+
+# Predict F1 scores using the model
+predicted_f1 <- predict(model, newdata = prediction_data, type = "response")
+
+# Inverse z-transform area for the x-axis
+original_area <- z_area_seq * sd_area + mean_area
+
+prediction_plot_data <- data.frame(
+  original_area = original_area,
+  predicted_f1 = predicted_f1
+)
+
+# Plot data points and predicted values
+library(ggplot2)
+
+ggplot(data, aes(x = ConvexHullArea, y = Adjusted_F1)) +  # Replace 'Area' with the original area column
+  geom_point(alpha = 0.5, color = "blue", size = 2) +  # Data points
+  geom_line(data = prediction_plot_data, aes(x = original_area, y = predicted_f1), color = "red", size = 1) +  # Predicted line
+  labs(
+    x = "Area (original scale)",
+    y = "F1 Score",
+    title = "F1 Score as a Function of Area",
+    subtitle = "Variability held constant at mean"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+data = read_excel(file.path(getwd(), "CombinedMeasures", "mfcc_CNN_3_corner_vowels.xlsx"))
+```
+
+```{r}
+# Fit beta, norm, gamma distribution
+fitbeta <- fitdist(data$F1_Score, "beta", method = "mle")
+fitnorm <- fitdist(data$F1_Score, "norm", method = "mle")
+fitgamma <- fitdist(data$F1_Score, "gamma", method = "mle")
+
+# Summary of fit
+summary(fitbeta)
+summary(fitnorm)
+summary(fitgamma)
+
+# Plot fitted distribution
+#plot(fit)
+
+
+```
+```{r}
+# Fit Beta Regression Model
+# Load the package
+library(betareg)
+
+# Standardize predictors
+data$z_Area <- scale(data$ConvexHullArea)
+data$z_Variability <- scale(data$variability)
+
+# Add Polynomial Terms
+data$z_Area2 <- data$z_Area^2
+data$z_Variability2 <- data$z_Variability^2
+
+# Adjust F1 Score if it contains 0 or 1
+data$Adjusted_F1 <- (data$F1_Score * (nrow(data) - 1) + 0.5) / nrow(data)
+
+# Fit Beta Regression Model with Polynomial Terms
+model <- betareg(
+  Adjusted_F1 ~ z_Area + z_Variability + z_Area:z_Variability + z_Area2 + 
+    z_Variability2,
+  data = data
+)
+
+# Model Summary
+summary(model)
+
+```
+
+```{r}
+# Define constants and functions for inverse z-transformation
+mean_area <- mean(data$ConvexHullArea)  # Replace 'Area' with the original area column name
+sd_area <- sd(data$ConvexHullArea)
+
+# Define a sequence for z_Area (varying z-transformed area)
+z_area_seq <- seq(min(data$z_Area), max(data$z_Area), length.out = 100)
+
+# Hold variability constant (mean of z_Variability)
+z_variability_mean <- mean(data$z_Variability)
+
+# Create a data frame for predictions
+prediction_data <- data.frame(
+  z_Area = z_area_seq,
+  z_Variability = z_variability_mean,
+  z_Area2 = z_area_seq^2,
+  z_Variability2 = z_variability_mean^2,
+  z_Area.z_Variability = z_area_seq * z_variability_mean
+)
+
+# Predict F1 scores using the model
+predicted_f1 <- predict(model, newdata = prediction_data, type = "response")
+
+# Inverse z-transform area for the x-axis
+original_area <- z_area_seq * sd_area + mean_area
+
+prediction_plot_data <- data.frame(
+  original_area = original_area,
+  predicted_f1 = predicted_f1
+)
+
+# Plot data points and predicted values
+library(ggplot2)
+
+ggplot(data, aes(x = ConvexHullArea, y = Adjusted_F1)) +  # Replace 'Area' with the original area column
+  geom_point(alpha = 0.5, color = "blue", size = 2) +  # Data points
+  geom_line(data = prediction_plot_data, aes(x = original_area, y = predicted_f1), color = "red", size = 1) +  # Predicted line
+  labs(
+    x = "Area (original scale)",
+    y = "F1 Score",
+    title = "F1 Score as a Function of Area",
+    subtitle = "Variability held constant at mean"
+  ) +
+  theme_minimal()
+```
+
+
+---
+title: "statistical_analysis_Norwegian_Danish_IDS_ADS_data"
+author: "Arun Prakash Singh"
+date: "2024-09-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+# 1. Load necessary libraries
+```{r}
+library(readxl)
+library(lme4)
+library(lmerTest)
+library(ggplot2)
+library(dplyr)
+library(crayon)
+library(merTools)
+library(boot)
+library(splines)
+library(stringr)
+library(cowplot)
+library(car)
+library(glmmTMB)
+library(DHARMa)
+library(emmeans)
+```
+# 2. Vowels sapce Area
+
+# 2.1. Formant
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "formant_no_ADS_3_bordervowels_M.xlsx"))
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "formant_no_IDS_3_bordervowels_M.xlsx"))
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "formant_da_ADS_3_bordervowels.xlsx"))
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "formant_da_IDS_3_bordervowels.xlsx"))
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())   
+
+# Calculate summary statistics for each session_id
+#session_stats <- df_no_ADS %>%
+  #group_by(session_id) %>%
+  #summarise(
+    #mean_value = mean(ConvexHullArea, na.rm = TRUE)/1000,  # mean 
+    #sd_value = sd(ConvexHullArea, na.rm = TRUE)/1000,       # Standard deviation
+    #max_value = max(ConvexHullArea, na.rm = TRUE)/1000,     # Maximum value
+    #min_value = min(ConvexHullArea, na.rm = TRUE)/1000,     # Minimum value
+    #num_observations = n(),                              # Number of observations
+    #num_unique_spk_id = n_distinct(spkid)                # Number of unique speaker IDs
+  #)
+
+# View the result
+#print(session_stats)
+
+
+output.2.1 <- lmer.full.reduced.null.compare(ConvexHullArea ~ Register*Language + AgeMonth + session_id + (1+Register|spkid) , 
+                        optimizer = "nloptwrap", 
+                         maxfun = 100000,
+                        fullm = TRUE,
+                         redm = FALSE, 
+                         redmformula = NULL, #ConvexHullArea ~ Register + AgeMonth + (1|spkid), 
+                         nullm = FALSE, 
+                         nullmformula = variability ~  AgeMonth + (1+Register|spkid) ,
+                        data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS),
+                        marginal_means = TRUE,
+                        specs = ~Register*Language
+                        )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.2.1 <- compute_contrasts(output.2.1$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.2.1$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(ConvexHullArea), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+three_vowels_formant_vowel_space_area <- lmer.plot.emmeans.contrasts(emmeans.data = output.2.1$emmeans, 
+                       contrasts.data = contrast_results.2.1$contrasts, 
+                       raw_data = plot.data, 
+                       y.ax.transformation = TRUE,
+                       inv_y_transform_fun = function(x) { exp(x) - 1 }, 
+                       div = 1000,
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "Vowel Space Area (kHz^2)",
+                       y_lim = c(0, 600),
+                      scale_size_range = c(1, 5),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,400, by = 100),
+                      size_scaling = NULL,
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+
+```
+# 2.2. MFCC
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "mfcc_no_ADS_3_bordervowels_M.xlsx"))
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "mfcc_no_IDS_3_bordervowels_M.xlsx"))
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "mfcc_da_ADS_3_bordervowels.xlsx"))
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Area", "mfcc_da_IDS_3_bordervowels.xlsx"))
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())   
+
+
+output.2.2 <- lmer.full.reduced.null.compare(ConvexHullArea ~ Register*Language + AgeMonth + session_id + (1+Register|spkid) , 
+                        optimizer = "nloptwrap", 
+                         maxfun = 100000,
+                        fullm = TRUE,
+                         redm = FALSE, 
+                         redmformula = NULL, #ConvexHullArea ~ Register + AgeMonth + (1|spkid), 
+                         nullm = FALSE, 
+                         nullmformula = NULL,
+                        data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS),
+                        marginal_means = TRUE,
+                        specs = ~Register*Language
+                        )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.2.2 <- compute_contrasts(output.2.2$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.2.2$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(ConvexHullArea), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+three_vowels_mfcc_vowel_space_area <- lmer.plot.emmeans.contrasts(emmeans.data = output.2.2$emmeans, 
+                       contrasts.data = contrast_results.2.2$contrasts, 
+                       raw_data = plot.data, 
+                       y.ax.transformation = TRUE,
+                       inv_y_transform_fun = function(x) { exp(x) - 1 }, 
+                       div = 1000,
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "Vowel Space Area (unit^2)",
+                       y_lim = c(0, 40),
+                      scale_size_range = c(1, 5),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,20, by = 10),
+                      size_scaling = NULL,
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+```
+
+#3. Variability
+#3.1. Formant
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "formant_no_ADS_3_bordervowels_M.xlsx"))
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "formant_no_IDS_3_bordervowels_M.xlsx"))
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "formant_da_ADS_3_bordervowels.xlsx"))
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "formant_da_IDS_3_bordervowels.xlsx"))
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())   
+
+
+output.3.1 <- lmer.full.reduced.null.compare(variability ~ Register*Language + AgeMonth + session_id + (1+Register|spkid) + (1+Register|IPA) , 
+                        optimizer = "nloptwrap", 
+                         maxfun = 100000,
+                        fullm = TRUE,
+                         redm = FALSE, 
+                         redmformula = NULL, #ConvexHullArea ~ Register + AgeMonth + (1|spkid), 
+                         nullm = FALSE, 
+                         nullmformula = NULL,
+                        data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS),
+                        marginal_means = TRUE,
+                        specs = ~Register*Language
+                        )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.3.1 <- compute_contrasts(output.3.1$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.3.1$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(variability), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+three_vowels_formant_variability <- lmer.plot.emmeans.contrasts(emmeans.data = output.3.1$emmeans, 
+                       contrasts.data = contrast_results.3.1$contrasts, 
+                       raw_data = plot.data, 
+                       y.ax.transformation = TRUE,
+                       inv_y_transform_fun = function(x) { exp(x) - 1 }, 
+                       div = 1000,
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "Variability (kHz^2)",
+                       y_lim = c(0, 120),
+                      scale_size_range = c(1, 6),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,80, by = 20),
+                      size_scaling = 'log',
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+```
+# 3.2. MFCC
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "mfcc_no_ADS_3_bordervowels_M.xlsx"))
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "mfcc_no_IDS_3_bordervowels_M.xlsx"))
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "mfcc_da_ADS_3_bordervowels.xlsx"))
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Variability", "mfcc_da_IDS_3_bordervowels.xlsx"))
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())   
+
+
+output.3.2 <- lmer.full.reduced.null.compare(variability ~ Register*Language + AgeMonth + session_id + (1+Register|spkid) + (1+Register|IPA) , 
+                        optimizer = "nloptwrap", 
+                         maxfun = 100000,
+                        fullm = TRUE,
+                         redm = FALSE, 
+                         redmformula = NULL, #ConvexHullArea ~ Register + AgeMonth + (1|spkid), 
+                         nullm = FALSE, 
+                         nullmformula = NULL,
+                        data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS),
+                        marginal_means = TRUE,
+                        specs = ~Register*Language
+                        )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.3.2 <- compute_contrasts(output.3.2$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.3.2$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(variability), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+three_vowels_mfcc_variability <- lmer.plot.emmeans.contrasts(emmeans.data = output.3.2$emmeans, 
+                       contrasts.data = contrast_results.3.2$contrasts, 
+                       raw_data = plot.data, 
+                       y.ax.transformation = TRUE,
+                       inv_y_transform_fun = function(x) { exp(x) - 1 }, 
+                       div = 1000,
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "Variability (unit^2)",
+                       y_lim = c(0, 8),
+                      scale_size_range = c(1, 6),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,5, by = 2),
+                      size_scaling = 'log',
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+```
+# 4. Separability
+#4.1. Formant
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "formant_no_ADS_3_bordervowels_M.xlsx"))
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "formant_no_IDS_3_bordervowels_M.xlsx"))
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "formant_da_ADS_3_bordervowels.xlsx"))
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "formant_da_IDS_3_bordervowels.xlsx"))
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())   
+
+
+output.4.1 <- glmmTB.full.reduced.null.compare(fullmformula = separability ~ Register*Language + AgeMonth + session_id + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = TRUE,
+                                             redm = FALSE, 
+                                             redmformula = separability ~ Register*Language + AgeMonth + session_id + (1|spkid), 
+                                             nullm = FALSE, 
+                                             nullmformula = NULL,
+                                             data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS), 
+                                           marginal_means = TRUE,
+                                          specs = ~Register*Language
+                                          )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.4.1 <- compute_contrasts(output.4.1$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.4.1$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(separability), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+three_vowels_formant_separability <- glmmTB.plot.emmeans.contrasts(emmeans.data = output.4.1$emmeans, 
+                       contrasts.data = contrast_results.4.1$contrasts, 
+                       raw_data = plot.data, 
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "Separability (pillai score)",
+                       y_lim = c(0, 1.5),
+                      scale_size_range = c(1, 5),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,1, by = 0.2),
+                      size_scaling = NULL,
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+
+```
+
+#4.2. MFCC
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "formant_no_ADS_3_bordervowels_M.xlsx"))
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "mfcc_no_IDS_3_bordervowels_M.xlsx"))
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "mfcc_da_ADS_3_bordervowels.xlsx"))
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Separability", "mfcc_da_IDS_3_bordervowels.xlsx"))
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())   
+
+
+output.4.2 <- glmmTB.full.reduced.null.compare(fullmformula = separability ~ Register*Language + AgeMonth + session_id + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = TRUE,
+                                             redm = FALSE, 
+                                             redmformula = separability ~ Register*Language + AgeMonth + session_id + (1|spkid), 
+                                             nullm = FALSE, 
+                                             nullmformula = NULL,
+                                             data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS), 
+                                           marginal_means = TRUE,
+                                          specs = ~Register*Language
+                                          )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.4.2 <- compute_contrasts(output.4.2$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.4.2$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(separability), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+three_vowels_mfcc_separability <- glmmTB.plot.emmeans.contrasts(emmeans.data = output.4.2$emmeans, 
+                       contrasts.data = contrast_results.4.2$contrasts, 
+                       raw_data = plot.data, 
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "Separability (pillai score)",
+                       y_lim = c(0, 1.5),
+                      scale_size_range = c(1, 5),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,1, by = 0.2),
+                      size_scaling = NULL,
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+
+
+```
+# 5. xgboost Generalisability
+# 5.1 Formant 
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost","formant_no_ADS_3_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost", "formant_no_IDS_3_bordervowels_M.xlsx"))
+df_no_ADS$F1_Score <- as.numeric(df_no_ADS$F1_Score)
+df_no_IDS$F1_Score <- as.numeric(df_no_IDS$F1_Score)
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost","formant_da_ADS_3_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost", "formant_da_IDS_3_bordervowels.xlsx"))
+df_da_ADS$F1_Score <- as.numeric(df_da_ADS$F1_Score)
+df_da_IDS$F1_Score <- as.numeric(df_da_IDS$F1_Score)
+
+
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+
+
+output.5.1 <- glmmTB.full.reduced.null.compare(fullmformula = F1_Score ~ Register*Language + AgeMonth + train_samples +  (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = TRUE,
+                                             redm = FALSE, 
+                                             redmformula = F1_Score ~ Register*Language + AgeMonth + session_id + train_samples + (1|spkid), 
+                                             nullm = FALSE, 
+                                             nullmformula = NULL,
+                                             data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS), 
+                                           marginal_means = TRUE,
+                                          specs = ~Register*Language
+                                          )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.5.1 <- compute_contrasts(output.5.1$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.5.1$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(F1_Score), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+three_vowels_formant_generalisability <- glmmTB.plot.emmeans.contrasts(emmeans.data = output.5.1$emmeans, 
+                       contrasts.data = contrast_results.5.1$contrasts, 
+                       raw_data = plot.data, 
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "XGBoost:Generalisability (F1_score)",
+                       y_lim = c(0, 1.5),
+                      scale_size_range = c(1, 5),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,1, by = 0.2),
+                      size_scaling = NULL,
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+```
+# 5.2.MFCC
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost","mfcc_no_ADS_3_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost", "mfcc_no_IDS_3_bordervowels_M.xlsx"))
+df_no_ADS$F1_Score <- as.numeric(df_no_ADS$F1_Score)
+df_no_IDS$F1_Score <- as.numeric(df_no_IDS$F1_Score)
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost","mfcc_da_ADS_3_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "xgboost", "mfcc_da_IDS_3_bordervowels.xlsx"))
+df_da_ADS$F1_Score <- as.numeric(df_da_ADS$F1_Score)
+df_da_IDS$F1_Score <- as.numeric(df_da_IDS$F1_Score)
+
+
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+
+
+output.5.2 <- glmmTB.full.reduced.null.compare(fullmformula = F1_Score ~ Register*Language + AgeMonth + train_samples +  (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = TRUE,
+                                             redm = FALSE, 
+                                             redmformula = F1_Score ~ Register*Language + AgeMonth + session_id + train_samples + (1|spkid), 
+                                             nullm = FALSE, 
+                                             nullmformula = NULL,
+                                             data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS), 
+                                           marginal_means = TRUE,
+                                          specs = ~Register*Language
+                                          )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.5.2 <- compute_contrasts(output.5.2$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.5.2$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(F1_Score), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+three_vowels_mfcc_generalisability <- glmmTB.plot.emmeans.contrasts(emmeans.data = output.5.2$emmeans, 
+                       contrasts.data = contrast_results.5.2$contrasts, 
+                       raw_data = plot.data, 
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "XGBoost:Generalisability (F1_score)",
+                       y_lim = c(0, 1.5),
+                      scale_size_range = c(1, 5),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,1, by = 0.2),
+                      size_scaling = NULL,
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+```
+
+
+# 6. CNN Generalisability
+# 6.1. Formant
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN","formant_no_ADS_3_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN", "formant_no_IDS_3_bordervowels_M.xlsx"))
+df_no_ADS$F1_Score <- as.numeric(df_no_ADS$F1_Score)
+df_no_IDS$F1_Score <- as.numeric(df_no_IDS$F1_Score)
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN","formant_da_ADS_3_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN", "formant_da_IDS_3_bordervowels.xlsx"))
+df_da_ADS$F1_Score <- as.numeric(df_da_ADS$F1_Score)
+df_da_IDS$F1_Score <- as.numeric(df_da_IDS$F1_Score)
+
+
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+
+
+output.6.1 <- glmmTB.full.reduced.null.compare(fullmformula = F1_Score ~ Register*Language + AgeMonth + train_samples + (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = TRUE,
+                                             redm = FALSE, 
+                                             redmformula = F1_Score ~ Register*Language + AgeMonth + session_id + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula = F1_Score ~ Register*Language + AgeMonth + (1+Register|spkid),
+                                             data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS), 
+                                           marginal_means = TRUE,
+                                          specs = ~Register*Language
+                                          )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.6.1 <- compute_contrasts(output.6.1$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.6.1$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(F1_Score), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+CNN_three_vowels_formant_generalisability <- glmmTB.plot.emmeans.contrasts(emmeans.data = output.6.1$emmeans, 
+                       contrasts.data = contrast_results.6.1$contrasts, 
+                       raw_data = plot.data, 
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "CNN:Generalisability (F1_score)",
+                       y_lim = c(0, 1.5),
+                      scale_size_range = c(1, 5),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,1, by = 0.2),
+                      size_scaling = NULL,
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+```
+# 6.2. MFCC
+```{r}
+df_no_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN","mfcc_no_ADS_3_bordervowels_M.xlsx"))
+df_no_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN", "mfcc_no_IDS_3_bordervowels_M.xlsx"))
+df_no_ADS$F1_Score <- as.numeric(df_no_ADS$F1_Score)
+df_no_IDS$F1_Score <- as.numeric(df_no_IDS$F1_Score)
+df_da_ADS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN","mfcc_da_ADS_3_bordervowels.xlsx"))
+df_da_IDS <- read_excel(file.path(getwd(), "VowelBasedMeasures", "Generalisability", "CNN", "mfcc_da_IDS_3_bordervowels.xlsx"))
+df_da_ADS$F1_Score <- as.numeric(df_da_ADS$F1_Score)
+df_da_IDS$F1_Score <- as.numeric(df_da_IDS$F1_Score)
+
+
+
+# occurance column
+df_no_ADS <- df_no_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())             
+
+
+# occurance column
+df_no_IDS <- df_no_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+
+# occurance column
+df_da_ADS <- df_da_ADS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number())
+
+# occurance column
+df_da_IDS <- df_da_IDS %>%
+  arrange(spkid, AgeMonth) %>%                  
+  group_by(spkid, Register) %>%                 
+  mutate(session_id = row_number()) 
+
+
+
+output.6.2 <- glmmTB.full.reduced.null.compare(fullmformula = F1_Score ~ Register*Language + AgeMonth + train_samples +  (1+Register|spkid),
+                                           family = beta_family(link = "logit"),
+                                           zi_formula = ~0,
+                                             fullm = TRUE,
+                                             redm = FALSE, 
+                                             redmformula = F1_Score ~ Register*Language + AgeMonth + session_id + train_samples + (1|spkid), 
+                                             nullm = TRUE, 
+                                             nullmformula = F1_Score ~ Register*Language + AgeMonth +  (1+Register|spkid),
+                                             data_list = list(df_no_ADS, df_no_IDS, df_da_ADS, df_da_IDS), 
+                                           marginal_means = TRUE,
+                                          specs = ~Register*Language
+                                          )
+
+# Define custom contrasts based interaction levels
+custom_contrasts <- list(
+  "ADS*no vs IDS*no" = c(0, 0, 1, -1),    # Comparing 'ADS no' vs 'IDS no'
+  "ADS*da vs IDS*da" = c(1, -1, 0, 0),    # Comparing 'ADS da' vs 'IDS da'
+  "ADS*no vs ADS*da" = c(-1, 0, 1, 0),    # Comparing 'ADS no' vs 'ADS da'
+  "IDS*no vs IDS*da" = c(0, -1, 0, 1)     # Comparing 'IDS no' vs 'IDS da'
+)
+contrast_results.6.2 <- compute_contrasts(output.6.2$emmeans, compute_pairwise = FALSE, custom_contrasts = custom_contrasts, adjust_method = "sidak")
+```
+
+```{r}
+# Prepare the plot data (aggregating the actual data)
+plot.data <- output.6.2$fit_data %>%
+  group_by(Language, Register, spkid) %>%
+  summarise(value = mean(F1_Score), n = n(), .groups = "drop")
+# Extract numeric part of spk_id
+plot.data[plot.data$Language == 'no', ]$spkid <- str_extract(plot.data[plot.data$Language == 'no', ]$spkid, "[0-9]+")
+
+CNN_three_vowels_mfcc_generalisability <- glmmTB.plot.emmeans.contrasts(emmeans.data = output.6.2$emmeans, 
+                       contrasts.data = contrast_results.6.2$contrasts, 
+                       raw_data = plot.data, 
+                       x_labs = 'Groups (Register*Language)',
+                       y_labs = "CNN:Generalisability (F1_score)",
+                       y_lim = c(0, 1.5),
+                      scale_size_range = c(1, 5),
+                      color_gradient_low = "grey60",   
+                      color_gradient_high = "grey10",  
+                      color_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),             
+                      size_breaks = seq(min(range(plot.data$n)),  max(range(plot.data$n)), by = 1),              
+                      y_breaks = seq(0,1, by = 0.2),
+                      size_scaling = NULL,
+                      aspect_ratio = NULL,
+                      title = NULL,
+                      legend = FALSE )
+```
+# 7. Save Plots
+```{r}
+ggsave(file.path(getwd(), "StatPlots", "Area_no_da_Formant_three_corner_vowels.pdf"), plot = three_vowels_formant_vowel_space_area, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Area_no_da_MFCC_three_corner_vowels.pdf"), plot = three_vowels_mfcc_vowel_space_area, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Variability_no_da_Formant_three_corner_vowels.pdf"), plot = three_vowels_formant_variability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Variability_no_da_MFCC_three_corner_vowels.pdf"), plot = three_vowels_mfcc_variability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "separability_no_da_Formant_three_corner_vowels.pdf"), plot = three_vowels_formant_separability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "separability_no_da_MFCC_three_corner_vowels.pdf"), plot = three_vowels_mfcc_separability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_xgboost_no_da_Formant_three_corner_vowels.pdf"), plot = three_vowels_formant_generalisability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_xgboost_no_da_mfcc_three_corner_vowels.pdf"), plot = three_vowels_mfcc_generalisability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_CNN_no_da_Formant_three_corner_vowels.pdf"), plot = CNN_three_vowels_formant_generalisability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_CNN_no_da_mfcc_three_corner_vowels.pdf"), plot = CNN_three_vowels_mfcc_generalisability, height = 5)
+
+ggsave(file.path(getwd(), "StatPlots", "Area_no_da_Formant_three_corner_vowels.jpg"), plot = three_vowels_formant_vowel_space_area, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Area_no_da_MFCC_three_corner_vowels.jpg"), plot = three_vowels_mfcc_vowel_space_area, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Variability_no_da_Formant_three_corner_vowels.jpg"), plot = three_vowels_formant_variability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Variability_no_da_MFCC_three_corner_vowels.jpg"), plot = three_vowels_mfcc_variability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "separability_no_da_Formant_three_corner_vowels.jpg"), plot = three_vowels_formant_separability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "separability_no_da_MFCC_three_corner_vowels.jpg"), plot = three_vowels_mfcc_separability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_xgboost_no_da_Formant_three_corner_vowels.jpg"), plot = three_vowels_formant_generalisability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_xgboost_no_da_mfcc_three_corner_vowels.jpg"), plot = three_vowels_mfcc_generalisability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_CNN_no_da_Formant_three_corner_vowels.jpg"), plot = CNN_three_vowels_formant_generalisability, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "Generalisability_CNN_no_da_mfcc_three_corner_vowels.jpg"), plot = CNN_three_vowels_mfcc_generalisability, height = 5)
+```
+
+
+## Beta regression model for F1 scores
+
+```{r}
+library(betareg)
+library(MASS)
+library(fitdistrplus)
+library(betareg)
+
+
+# Standardize predictors
+#data$z_Area <- scale(data$ConvexHullArea)
+#data$z_Variability <- scale(data$variability)
+
+# Adjust F1 Score if it contains 0 or 1
+#data$Adjusted_F1 <- (data$F1_Score * (nrow(data) - 1) + 0.5) / nrow(data)
+
+```
+
+```{r}
+data = read_excel(file.path(getwd(), "CombinedMeasures", "formant_XGBoost_3_corner_vowels.xlsx"))
+```
+
+```{r}
+# Fit beta, norm, gamma distribution
+fitbeta <- fitdist(data$F1_Score, "beta", method = "mle")
+fitnorm <- fitdist(data$F1_Score, "norm", method = "mle")
+fitgamma <- fitdist(data$F1_Score, "gamma", method = "mle")
+
+# Summary of fit
+summary(fitbeta)
+summary(fitnorm)
+summary(fitgamma)
+
+# Plot fitted distribution
+#plot(fit)
+
+
+```
+
+```{r}
+# Fit Beta Regression Model
+# Load the package
+
+
+# Standardize predictors
+data$z_Area <- scale(data$ConvexHullArea)
+data$z_Variability <- scale(data$variability)
+
+# Add Polynomial Terms
+data$z_Area2 <- data$z_Area^2
+data$z_Variability2 <- data$z_Variability^2
+
+# Adjust F1 Score if it contains 0 or 1
+data$Adjusted_F1 <- (data$F1_Score * (nrow(data) - 1) + 0.5) / nrow(data)
+
+# Fit Beta Regression Model with Polynomial Terms
+model <- betareg(
+  Adjusted_F1 ~ z_Area + z_Variability + z_Area:z_Variability + z_Area2 + 
+    z_Variability2,
+  data = data
+)
+
+# Model Summary
+summary(model)
+
+
+
+```
+
+```{r}
+# Define constants and functions for inverse z-transformation
+mean_area <- mean(data$ConvexHullArea)  # Replace 'Area' with the original area column name
+sd_area <- sd(data$ConvexHullArea)
+
+# Define a sequence for z_Area (varying z-transformed area)
+z_area_seq <- seq(min(data$z_Area), max(data$z_Area), length.out = 100)
+
+# Hold variability constant (mean of z_Variability)
+z_variability_mean <- mean(data$z_Variability)
+
+# Create a data frame for predictions
+prediction_data <- data.frame(
+  z_Area = z_area_seq,
+  z_Variability = z_variability_mean,
+  z_Area2 = z_area_seq^2,
+  z_Variability2 = z_variability_mean^2,
+  z_Area.z_Variability = z_area_seq * z_variability_mean
+)
+
+# Predict F1 scores using the model
+predicted_f1 <- predict(model, newdata = prediction_data, type = "response")
+
+# Inverse z-transform area for the x-axis
+original_area <- z_area_seq * sd_area + mean_area
+
+# Bootstrap confidence intervals
+n_bootstrap <- 1000
+bootstrap_predictions <- matrix(NA, nrow = n_bootstrap, ncol = length(z_area_seq))
+
+for (i in 1:n_bootstrap) {
+  # Resample data with replacement
+  bootstrap_data <- data[sample(1:nrow(data), replace = TRUE), ]
+  
+  # Fit the model on bootstrap data
+  bootstrap_model <- betareg(
+    formula = Adjusted_F1 ~ z_Area + z_Variability + z_Area:z_Variability +
+      z_Area2 + z_Variability2,
+    data = bootstrap_data
+  )
+  
+  # Predict using bootstrap model
+  bootstrap_predictions[i, ] <- predict(bootstrap_model, newdata = prediction_data, type = "response")
+}
+
+# Calculate confidence intervals
+lower_ci <- apply(bootstrap_predictions, 2, quantile, probs = 0.025)
+upper_ci <- apply(bootstrap_predictions, 2, quantile, probs = 0.975)
+
+prediction_plot_data <- data.frame(
+  original_area = original_area,
+  predicted_f1 = predicted_f1,
+  lower_ci = lower_ci,
+  upper_ci = upper_ci
+)
+
+# Plot data points, predicted values, and confidence bands
+library(ggplot2)
+library(scales)  # For formatting axis labels
+
+# Convert Hz² to kHz²
+prediction_plot_data$original_area_khz2 <- prediction_plot_data$original_area / 1e6
+data$ConvexHullArea_khz2 <- data$ConvexHullArea / 1e6
+
+p <- ggplot() +
+  geom_point(data = data, aes(x = ConvexHullArea_khz2, y = Adjusted_F1), alpha = 0.5, color = "blue", size = 2) +
+  geom_line(data = prediction_plot_data, aes(x = original_area_khz2, y = predicted_f1), color = "red", size = 1) +  
+  geom_ribbon(data = prediction_plot_data, aes(x = original_area_khz2, ymin = lower_ci, ymax = upper_ci), fill = "red", alpha = 0.2) +  
+  labs(
+    x = "Vowel Space Area (kHz²)",  # Updated label
+    y = "F1 Score"
+  ) +
+  scale_x_continuous(labels = comma_format(accuracy = 0.01)) +  # Remove scientific notation, keep two decimals
+  scale_y_continuous(limits = c(0.5, 1)) +
+  theme_minimal()
+
+print(p)
+```
+```{r}
+ggsave(file.path(getwd(), "StatPlots", "XGBoost_Formant_Area_vs_F1_score.pdf"), plot = p, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "XGBoost_Formant_Area_vs_F1_score.jpg"), plot = p, height = 5)
+```
+
+```{r}
+data = read_excel(file.path(getwd(), "CombinedMeasures", "mfcc_XGBoost_3_corner_vowels.xlsx"))
+```
+
+```{r}
+# Fit beta, norm, gamma distribution
+fitbeta <- fitdist(data$F1_Score, "beta", method = "mle")
+fitnorm <- fitdist(data$F1_Score, "norm", method = "mle")
+fitgamma <- fitdist(data$F1_Score, "gamma", method = "mle")
+
+# Summary of fit
+summary(fitbeta)
+summary(fitnorm)
+summary(fitgamma)
+
+# Plot fitted distribution
+#plot(fit)
+
+
+```
+
+```{r}
+# Fit Beta Regression Model
+# Load the package
+library(betareg)
+
+# Standardize predictors
+data$z_Area <- scale(data$ConvexHullArea)
+data$z_Variability <- scale(data$variability)
+
+# Add Polynomial Terms
+data$z_Area2 <- data$z_Area^2
+data$z_Variability2 <- data$z_Variability^2
+
+# Adjust F1 Score if it contains 0 or 1
+data$Adjusted_F1 <- (data$F1_Score * (nrow(data) - 1) + 0.5) / nrow(data)
+
+# Fit Beta Regression Model with Polynomial Terms
+model <- betareg(
+  Adjusted_F1 ~ z_Area + z_Variability + z_Area:z_Variability + z_Area2 + 
+    z_Variability2,
+  data = data
+)
+
+# Model Summary
+summary(model)
+
+
+
+```
+
+```{r}
+# Define constants and functions for inverse z-transformation
+mean_area <- mean(data$ConvexHullArea)  # Replace 'Area' with the original area column name
+sd_area <- sd(data$ConvexHullArea)
+
+# Define a sequence for z_Area (varying z-transformed area)
+z_area_seq <- seq(min(data$z_Area), max(data$z_Area), length.out = 100)
+
+# Hold variability constant (mean of z_Variability)
+z_variability_mean <- mean(data$z_Variability)
+
+# Create a data frame for predictions
+prediction_data <- data.frame(
+  z_Area = z_area_seq,
+  z_Variability = z_variability_mean,
+  z_Area2 = z_area_seq^2,
+  z_Variability2 = z_variability_mean^2,
+  z_Area.z_Variability = z_area_seq * z_variability_mean
+)
+
+# Predict F1 scores using the model
+predicted_f1 <- predict(model, newdata = prediction_data, type = "response")
+
+# Inverse z-transform area for the x-axis
+original_area <- z_area_seq * sd_area + mean_area
+# Bootstrap confidence intervals
+n_bootstrap <- 1000
+bootstrap_predictions <- matrix(NA, nrow = n_bootstrap, ncol = length(z_area_seq))
+
+for (i in 1:n_bootstrap) {
+  # Resample data with replacement
+  bootstrap_data <- data[sample(1:nrow(data), replace = TRUE), ]
+  
+  # Fit the model on bootstrap data
+  bootstrap_model <- betareg(
+    formula = Adjusted_F1 ~ z_Area + z_Variability + z_Area:z_Variability +
+      z_Area2 + z_Variability2,
+    data = bootstrap_data
+  )
+  
+  # Predict using bootstrap model
+  bootstrap_predictions[i, ] <- predict(bootstrap_model, newdata = prediction_data, type = "response")
+}
+
+# Calculate confidence intervals
+lower_ci <- apply(bootstrap_predictions, 2, quantile, probs = 0.025)
+upper_ci <- apply(bootstrap_predictions, 2, quantile, probs = 0.975)
+
+prediction_plot_data <- data.frame(
+  original_area = original_area,
+  predicted_f1 = predicted_f1,
+  lower_ci = lower_ci,
+  upper_ci = upper_ci
+)
+
+# Plot data points, predicted values, and confidence bands
+library(ggplot2)
+library(scales)  # For formatting axis labels
+
+# Convert Hz² to kHz²
+prediction_plot_data$original_area_khz2 <- prediction_plot_data$original_area / 1e6
+data$ConvexHullArea_khz2 <- data$ConvexHullArea / 1e6
+
+p <- ggplot() +
+  geom_point(data = data, aes(x = ConvexHullArea_khz2, y = Adjusted_F1), alpha = 0.5, color = "blue", size = 2) +
+  geom_line(data = prediction_plot_data, aes(x = original_area_khz2, y = predicted_f1), color = "red", size = 1) +  
+  geom_ribbon(data = prediction_plot_data, aes(x = original_area_khz2, ymin = lower_ci, ymax = upper_ci), fill = "red", alpha = 0.2) +  
+  labs(
+    x = "Vowel Space Area (kHz²)",  # Updated label
+    y = "F1 Score"
+  ) +
+  scale_x_continuous(labels = comma_format(accuracy = 0.0001)) + 
+  scale_y_continuous(limits = c(0.5, 1)) +
+  theme_minimal()
+
+print(p)
+```
+```{r}
+ggsave(file.path(getwd(), "StatPlots", "XGBoost_MFCC_Area_vs_F1_score.pdf"), plot = p, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "XGBoost_MFCC_Area_vs_F1_score.jpg"), plot = p, height = 5)
+```
+
+```{r}
+data = read_excel(file.path(getwd(), "CombinedMeasures", "formant_CNN_3_corner_vowels.xlsx"))
+```
+
+```{r}
+# Fit beta, norm, gamma distribution
+fitbeta <- fitdist(data$F1_Score, "beta", method = "mle")
+fitnorm <- fitdist(data$F1_Score, "norm", method = "mle")
+fitgamma <- fitdist(data$F1_Score, "gamma", method = "mle")
+
+# Summary of fit
+summary(fitbeta)
+summary(fitnorm)
+summary(fitgamma)
+
+# Plot fitted distribution
+#plot(fit)
+
+
+```
+
+```{r}
+# Fit Beta Regression Model
+# Load the package
+library(betareg)
+
+# Standardize predictors
+data$z_Area <- scale(data$ConvexHullArea)
+data$z_Variability <- scale(data$variability)
+
+# Add Polynomial Terms
+data$z_Area2 <- data$z_Area^2
+data$z_Variability2 <- data$z_Variability^2
+
+# Adjust F1 Score if it contains 0 or 1
+data$Adjusted_F1 <- (data$F1_Score * (nrow(data) - 1) + 0.5) / nrow(data)
+
+# Fit Beta Regression Model with Polynomial Terms
+model <- betareg(
+  Adjusted_F1 ~ z_Area + z_Variability + z_Area:z_Variability + z_Area2 + 
+    z_Variability2,
+  data = data
+)
+
+# Model Summary
+summary(model)
+
+
+
+```
+
+```{r}
+# Define constants and functions for inverse z-transformation
+mean_area <- mean(data$ConvexHullArea)  
+sd_area <- sd(data$ConvexHullArea)
+
+# Define a sequence for z_Area (varying z-transformed area)
+z_area_seq <- seq(min(data$z_Area), max(data$z_Area), length.out = 100)
+
+# Hold variability constant (mean of z_Variability)
+z_variability_mean <- mean(data$z_Variability)
+
+# Create a data frame for predictions
+prediction_data <- data.frame(
+  z_Area = z_area_seq,
+  z_Variability = z_variability_mean,
+  z_Area2 = z_area_seq^2,
+  z_Variability2 = z_variability_mean^2,
+  z_Area.z_Variability = z_area_seq * z_variability_mean
+)
+
+# Predict F1 scores using the model
+predicted_f1 <- predict(model, newdata = prediction_data, type = "response")
+
+# Inverse z-transform area for the x-axis
+original_area <- z_area_seq * sd_area + mean_area
+
+# Bootstrap confidence intervals
+n_bootstrap <- 1000
+bootstrap_predictions <- matrix(NA, nrow = n_bootstrap, ncol = length(z_area_seq))
+
+for (i in 1:n_bootstrap) {
+  # Resample data with replacement
+  bootstrap_data <- data[sample(1:nrow(data), replace = TRUE), ]
+  
+  # Fit the model on bootstrap data
+  bootstrap_model <- betareg(
+    formula = Adjusted_F1 ~ z_Area + z_Variability + z_Area:z_Variability +
+      z_Area2 + z_Variability2,
+    data = bootstrap_data
+  )
+  
+  # Predict using bootstrap model
+  bootstrap_predictions[i, ] <- predict(bootstrap_model, newdata = prediction_data, type = "response")
+}
+
+# Calculate confidence intervals
+lower_ci <- apply(bootstrap_predictions, 2, quantile, probs = 0.025)
+upper_ci <- apply(bootstrap_predictions, 2, quantile, probs = 0.975)
+
+prediction_plot_data <- data.frame(
+  original_area = original_area,
+  predicted_f1 = predicted_f1,
+  lower_ci = lower_ci,
+  upper_ci = upper_ci
+)
+
+# Plot data points, predicted values, and confidence bands
+library(ggplot2)
+library(scales)  # For formatting axis labels
+
+# Convert Hz² to kHz²
+prediction_plot_data$original_area_khz2 <- prediction_plot_data$original_area / 1e6
+data$ConvexHullArea_khz2 <- data$ConvexHullArea / 1e6
+
+p <- ggplot() +
+  geom_point(data = data, aes(x = ConvexHullArea_khz2, y = Adjusted_F1), alpha = 0.5, color = "blue", size = 2) +
+  geom_line(data = prediction_plot_data, aes(x = original_area_khz2, y = predicted_f1), color = "red", size = 1) +  
+  geom_ribbon(data = prediction_plot_data, aes(x = original_area_khz2, ymin = lower_ci, ymax = upper_ci), fill = "red", alpha = 0.2) +  
+  labs(
+    x = "Vowel Space Area (kHz²)",  # Updated label
+    y = "F1 Score"
+  ) +
+  scale_x_continuous(labels = comma_format(accuracy = 0.01)) +  # Remove scientific notation, keep two decimals
+  scale_y_continuous(limits = c(0.5, 1)) +
+  theme_minimal()
+
+print(p)
+
+```
+
+```{r}
+ggsave(file.path(getwd(), "StatPlots", "CNN_Formant_Area_vs_F1_score.pdf"), plot = p, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "CNN_Formant_Area_vs_F1_score.jpg"), plot = p, height = 5)
+```
+
+```{r}
+data = read_excel(file.path(getwd(), "CombinedMeasures", "mfcc_CNN_3_corner_vowels.xlsx"))
+```
+
+```{r}
+# Fit beta, norm, gamma distribution
+fitbeta <- fitdist(data$F1_Score, "beta", method = "mle")
+fitnorm <- fitdist(data$F1_Score, "norm", method = "mle")
+fitgamma <- fitdist(data$F1_Score, "gamma", method = "mle")
+
+# Summary of fit
+summary(fitbeta)
+summary(fitnorm)
+summary(fitgamma)
+
+# Plot fitted distribution
+#plot(fit)
+
+
+```
+
+```{r}
+# Fit Beta Regression Model
+# Load the package
+library(betareg)
+
+# Standardize predictors
+data$z_Area <- scale(data$ConvexHullArea)
+data$z_Variability <- scale(data$variability)
+
+# Add Polynomial Terms
+data$z_Area2 <- data$z_Area^2
+data$z_Variability2 <- data$z_Variability^2
+
+#data$Area2 <- data$ConvexHullArea^2
+#data$Variability2 <- data$variability^2
+
+# Adjust F1 Score if it contains 0 or 1
+data$Adjusted_F1 <- (data$F1_Score * (nrow(data) - 1) + 0.5) / nrow(data)
+
+# Fit Beta Regression Model with Polynomial Terms
+model <- betareg(
+  Adjusted_F1 ~ z_Area + z_Variability + z_Area:z_Variability + z_Area2 + 
+    z_Variability2,
+  data = data
+)
+
+# Model Summary
+summary(model)
+
+```
+
+```{r}
+# Define constants and functions for inverse z-transformation
+mean_area <- mean(data$ConvexHullArea)  
+sd_area <- sd(data$ConvexHullArea)
+
+# Define a sequence for z_Area (varying z-transformed area)
+z_area_seq <- seq(min(data$z_Area), max(data$z_Area), length.out = 100)
+
+# Hold variability constant (mean of z_Variability)
+z_variability_mean <- mean(data$z_Variability)
+
+# Create a data frame for predictions
+prediction_data <- data.frame(
+  z_Area = z_area_seq,
+  z_Variability = z_variability_mean,
+  z_Area2 = z_area_seq^2,
+  z_Variability2 = z_variability_mean^2,
+  z_Area.z_Variability = z_area_seq * z_variability_mean
+)
+
+# Predict F1 scores using the model
+predicted_f1 <- predict(model, newdata = prediction_data, type = "response")
+
+# Inverse z-transform area for the x-axis
+original_area <- z_area_seq * sd_area + mean_area
+
+# Bootstrap confidence intervals
+n_bootstrap <- 1000
+bootstrap_predictions <- matrix(NA, nrow = n_bootstrap, ncol = length(z_area_seq))
+
+for (i in 1:n_bootstrap) {
+  # Resample data with replacement
+  bootstrap_data <- data[sample(1:nrow(data), replace = TRUE), ]
+  
+  # Fit the model on bootstrap data
+  bootstrap_model <- betareg(
+    formula = Adjusted_F1 ~ z_Area + z_Variability + z_Area:z_Variability +
+      z_Area2 + z_Variability2,
+    data = bootstrap_data
+  )
+  
+  # Predict using bootstrap model
+  bootstrap_predictions[i, ] <- predict(bootstrap_model, newdata = prediction_data, type = "response")
+}
+
+# Calculate confidence intervals
+lower_ci <- apply(bootstrap_predictions, 2, quantile, probs = 0.025)
+upper_ci <- apply(bootstrap_predictions, 2, quantile, probs = 0.975)
+
+prediction_plot_data <- data.frame(
+  original_area = original_area,
+  predicted_f1 = predicted_f1,
+  lower_ci = lower_ci,
+  upper_ci = upper_ci
+)
+
+# Plot data points, predicted values, and confidence bands
+library(ggplot2)
+library(scales)  # For formatting axis labels
+
+# Convert Hz² to kHz²
+prediction_plot_data$original_area_khz2 <- prediction_plot_data$original_area / 1e6
+data$ConvexHullArea_khz2 <- data$ConvexHullArea / 1e6
+
+p <- ggplot() +
+  geom_point(data = data, aes(x = ConvexHullArea_khz2, y = Adjusted_F1), alpha = 0.5, color = "blue", size = 2) +
+  geom_line(data = prediction_plot_data, aes(x = original_area_khz2, y = predicted_f1), color = "red", size = 1) +  
+  geom_ribbon(data = prediction_plot_data, aes(x = original_area_khz2, ymin = lower_ci, ymax = upper_ci), fill = "red", alpha = 0.2) +  
+  labs(
+    x = "Vowel Space Area (kHz²)",  # Updated label
+    y = "F1 Score"
+  ) +
+  scale_x_continuous(labels = comma_format(accuracy = 0.0001)) +  # Remove scientific notation, keep two decimals
+  scale_y_continuous(limits = c(0.5, 1)) +
+  theme_minimal()
+
+print(p)
+```
+```{r}
+ggsave(file.path(getwd(), "StatPlots", "CNN_MFCC_Area_vs_F1_score.pdf"), plot = p, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "CNN_MFCC_Area_vs_F1_score.jpg"), plot = p, height = 5)
+```
+
+```{r}
+# Define constants for inverse z-transformation
+mean_area <- mean(data$ConvexHullArea)
+sd_area <- sd(data$ConvexHullArea)
+mean_variability <- mean(data$variability)
+sd_variability <- sd(data$variability)
+
+# Define sequences for z-transformed Area and Variability
+z_area_seq <- seq(min(data$z_Area), max(data$z_Area), length.out = 100)
+
+# Define low and high variability thresholds (based on median)
+#low_variability <- median(data$z_Variability) - 0.5  
+#high_variability <- median(data$z_Variability) + 0.5
+
+low_variability <- mean(data[data$z_Variability < median(data$z_Variability), ]$z_Variability)
+high_variability <- mean(data[data$z_Variability > median(data$z_Variability), ]$z_Variability)
+
+# Create prediction data for low variability
+prediction_data_low <- data.frame(
+  z_Area = z_area_seq,
+  z_Variability = low_variability,
+  z_Area2 = z_area_seq^2,
+  z_Variability2 = low_variability^2,
+  z_Area.z_Variability = z_area_seq * low_variability
+)
+
+# Predict F1 scores for low variability
+predicted_f1_low <- predict(model, newdata = prediction_data_low, type = "response")
+original_area_low <- z_area_seq * sd_area + mean_area
+
+# Bootstrap confidence intervals for low variability
+bootstrap_predictions_low <- matrix(NA, nrow = n_bootstrap, ncol = length(z_area_seq))
+for (i in 1:n_bootstrap) {
+  bootstrap_data <- data[sample(1:nrow(data), replace = TRUE), ]
+  bootstrap_model <- betareg(
+    formula = Adjusted_F1 ~ z_Area + z_Variability + z_Area:z_Variability +
+      z_Area2 + z_Variability2,
+    data = bootstrap_data
+  )
+  bootstrap_predictions_low[i, ] <- predict(bootstrap_model, newdata = prediction_data_low, type = "response")
+}
+lower_ci_low <- apply(bootstrap_predictions_low, 2, quantile, probs = 0.025)
+upper_ci_low <- apply(bootstrap_predictions_low, 2, quantile, probs = 0.975)
+
+# Create prediction data for high variability
+prediction_data_high <- data.frame(
+  z_Area = z_area_seq,
+  z_Variability = high_variability,
+  z_Area2 = z_area_seq^2,
+  z_Variability2 = high_variability^2,
+  z_Area.z_Variability = z_area_seq * high_variability
+)
+
+# Predict F1 scores for high variability
+predicted_f1_high <- predict(model, newdata = prediction_data_high, type = "response")
+original_area_high <- z_area_seq * sd_area + mean_area
+
+# Bootstrap confidence intervals for high variability
+bootstrap_predictions_high <- matrix(NA, nrow = n_bootstrap, ncol = length(z_area_seq))
+for (i in 1:n_bootstrap) {
+  bootstrap_data <- data[sample(1:nrow(data), replace = TRUE), ]
+  bootstrap_model <- betareg(
+    formula = Adjusted_F1 ~ z_Area + z_Variability + z_Area:z_Variability +
+      z_Area2 + z_Variability2,
+    data = bootstrap_data
+  )
+  bootstrap_predictions_high[i, ] <- predict(bootstrap_model, newdata = prediction_data_high, type = "response")
+}
+lower_ci_high <- apply(bootstrap_predictions_high, 2, quantile, probs = 0.025)
+upper_ci_high <- apply(bootstrap_predictions_high, 2, quantile, probs = 0.975)
+
+# Combine results into data frames
+prediction_plot_data_low <- data.frame(
+  original_area = original_area_low,
+  predicted_f1 = predicted_f1_low,
+  lower_ci = lower_ci_low,
+  upper_ci = upper_ci_low
+)
+
+prediction_plot_data_high <- data.frame(
+  original_area = original_area_high,
+  predicted_f1 = predicted_f1_high,
+  lower_ci = lower_ci_high,
+  upper_ci = upper_ci_high
+)
+
+# Plot for low variability
+p_low <- ggplot() +
+  geom_point(data = data[data$z_Variability < median(data$z_Variability), ],
+             aes(x = ConvexHullArea, y = Adjusted_F1), alpha = 0.5, color = "blue", size = 2) +
+  geom_line(data = prediction_plot_data_low, 
+            aes(x = original_area, y = predicted_f1), color = "red", size = 1) +
+  geom_ribbon(data = prediction_plot_data_low, 
+              aes(x = original_area, ymin = lower_ci, ymax = upper_ci), 
+              fill = "red", alpha = 0.2) +
+  labs(
+    x = "Area (original scale)",
+    y = "F1 Score",
+    title = "F1 Score as a Function of Area (Low Variability)",
+    subtitle = "Confidence intervals for low variability values"
+  ) +
+  theme_minimal()
+
+# Plot for high variability
+p_high <- ggplot() +
+  geom_point(data = data[data$z_Variability >= median(data$z_Variability), ],
+             aes(x = ConvexHullArea, y = Adjusted_F1), alpha = 0.5, color = "blue", size = 2) +
+  geom_line(data = prediction_plot_data_high, 
+            aes(x = original_area, y = predicted_f1), color = "red", size = 1) +
+  geom_ribbon(data = prediction_plot_data_high, 
+              aes(x = original_area, ymin = lower_ci, ymax = upper_ci), 
+              fill = "red", alpha = 0.2) +
+  labs(
+    x = "Area (original scale)",
+    y = "F1 Score",
+    title = "F1 Score as a Function of Area (High Variability)",
+    subtitle = "Confidence intervals for high variability values"
+  ) +
+  theme_minimal()
+
+# Print both plots
+print(p_low)
+print(p_high)
+
+```
+
+```{r}
+# Combine results into a single data frame with a condition column
+prediction_plot_data_low$Condition <- "Low Variability"
+prediction_plot_data_high$Condition <- "High Variability"
+combined_prediction_data <- rbind(prediction_plot_data_low, prediction_plot_data_high)
+
+# Add a condition column to the original data for point differentiation
+data$Condition <- ifelse(data$z_Variability < median(data$z_Variability), 
+                         "Low Variability", "High Variability")
+# Convert Hz² to kHz²
+combined_prediction_data$original_area_khz2 <- combined_prediction_data$original_area / 1e6
+data$ConvexHullArea_khz2 <- data$ConvexHullArea / 1e6
+# Combined plot
+p_combined <- ggplot() +
+  # Data points for low and high variability
+  geom_point(data = data, 
+             aes(x = ConvexHullArea_khz2, y = Adjusted_F1, color = Condition), 
+             alpha = 0.2, size = 2) +
+  # Prediction lines for low and high variability
+  geom_line(data = combined_prediction_data, 
+            aes(x = original_area_khz2, y = predicted_f1, color = Condition), 
+            size = 1) +
+  # Confidence ribbons for low and high variability
+  geom_ribbon(data = combined_prediction_data, 
+              aes(x = original_area_khz2, ymin = lower_ci, ymax = upper_ci, fill = Condition), 
+              alpha = 0.2) +
+  # Labels and theme
+  labs(
+    x = "Vowel Space Area (kHz^2)",
+    y = "F1 Score",
+    #title = "F1 Score as a Function of Area (Low and High Variability)",
+    #subtitle = "Confidence intervals for low (708.726 Hz^2) and high (1805.454 Hz^2) variability values"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("Low Variability" = "blue", "High Variability" = "red")) +
+  scale_fill_manual(values = c("Low Variability" = "blue", "High Variability" = "red"))
+
+# Print the combined plot
+print(p_combined)
+
+```
+```{r}
+ggsave(file.path(getwd(), "StatPlots", "CNN_MFCC_interaction_Var_Area_vs_F1_score.pdf"), plot = p_combined, height = 5)
+ggsave(file.path(getwd(), "StatPlots", "CNN_MFCC_interaction_Var_Area_vs_F1_score.jpg"), plot = p_combined, height = 5)
+```
+
+
+```{r}
+# Define constants and functions for inverse z-transformation
+mean_variability <- mean(data$variability)
+sd_variability <- sd(data$variability)
+
+# Define a sequence for z_Variability (above median or mean)
+median_z_variability <- median(data$z_Variability)  # Median of z-transformed variability
+z_variability_seq <- seq(median_z_variability, max(data$z_Variability), length.out = 100)
+
+# Hold Area constant (mean of z_Area)
+z_area_mean <- mean(data$z_Area)
+
+# Create a data frame for predictions
+prediction_data <- data.frame(
+  z_Area = z_area_mean,
+  z_Variability = z_variability_seq,
+  z_Area2 = z_area_mean^2,
+  z_Variability2 = z_variability_seq^2,
+  z_Area.z_Variability = z_area_mean * z_variability_seq
+)
+
+# Predict F1 scores using the model
+predicted_f1 <- predict(model, newdata = prediction_data, type = "response")
+
+# Inverse z-transform variability for the x-axis
+original_variability <- z_variability_seq * sd_variability + mean_variability
+
+# Bootstrap confidence intervals
+n_bootstrap <- 1000
+bootstrap_predictions <- matrix(NA, nrow = n_bootstrap, ncol = length(z_variability_seq))
+
+for (i in 1:n_bootstrap) {
+  # Resample data with replacement
+  bootstrap_data <- data[sample(1:nrow(data), replace = TRUE), ]
+  
+  # Fit the model on bootstrap data
+  bootstrap_model <- betareg(
+    formula = Adjusted_F1 ~ z_Area + z_Variability + z_Area:z_Variability +
+      z_Area2 + z_Variability2,
+    data = bootstrap_data
+  )
+  
+  # Predict using bootstrap model
+  bootstrap_predictions[i, ] <- predict(bootstrap_model, newdata = prediction_data, type = "response")
+}
+
+# Calculate confidence intervals
+lower_ci <- apply(bootstrap_predictions, 2, quantile, probs = 0.025)
+upper_ci <- apply(bootstrap_predictions, 2, quantile, probs = 0.975)
+
+prediction_plot_data <- data.frame(
+  original_variability = original_variability,
+  predicted_f1 = predicted_f1,
+  lower_ci = lower_ci,
+  upper_ci = upper_ci
+)
+
+# Plot data points, predicted values, and confidence bands
+library(ggplot2)
+p <- ggplot()
+p <- p + 
+  geom_point(data = data[data$variability > median(data$variability), ],  # Only plot points with high variability
+             aes(x = variability, y = Adjusted_F1), alpha = 0.5, color = "blue", size = 2) +
+
+  geom_line(data = prediction_plot_data, 
+            aes(x = original_variability, y = predicted_f1), color = "red", size = 1) +  # Predicted line
+  geom_ribbon(data = prediction_plot_data, 
+              aes(x = original_variability, ymin = lower_ci, ymax = upper_ci), 
+              fill = "red", alpha = 0.2) +  # Confidence bands
+  labs(
+    x = "Variability (original scale)",
+    y = "F1 Score",
+    title = "F1 Score as a Function of Variability (High Values Only)",
+    subtitle = "Variability values above the median with 95% Confidence Intervals"
+  ) +
+  theme_minimal()
+print(p)
+
+
+```
