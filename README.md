@@ -78,7 +78,7 @@ rmarkdown::render("Six_vowels_statistical_analysis_Norwegian_Danish_IDS_ADS_data
 train_test_xgboost and xgboost_load_data_compute_f1score_for_speaker_age functions handle  
 speaker-specific training and evaluation with F1-score computation.
 
-```python
+```bash
 from your_script import xgboost_load_data_compute_f1score_for_speaker_age
 
 train_csv = "/path/to/train_data.csv"
@@ -94,6 +94,9 @@ results_df = xgboost_load_data_compute_f1score_for_speaker_age(
 )
 
 print(results_df.head())
+---
+```
+```bash
 #### 🧩 Example: CNN + Optuna Hyperparameter Optimization
 
 `cnn_load_data_compute_f1score_for_speaker_age` trains a small 1-D CNN  
@@ -116,7 +119,7 @@ results_df = cnn_load_data_compute_f1score_for_speaker_age(
 )  
 
 print(results_df)  
-
+```
 ---
 
 **Both functions output a DataFrame with columns like:**  
