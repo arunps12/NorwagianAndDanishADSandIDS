@@ -71,15 +71,60 @@ rmarkdown::render("Six_vowels_statistical_analysis_Norwegian_Danish_IDS_ADS_data
 
 1. Set data paths in `paths.py`  
 2. Extract features using the relevant feature extraction scripts  
-3. Train or evaluate models with:
-```bash
-from model import train_model, evaluate  
-from utils import load_dataset  
+3. Train or evaluate models with **XGBoost** or **CNN + Optuna**, as shown below:
 
-X_train, y_train = load_dataset(split="train")  
-clf = train_model(X_train, y_train)  
-evaluate(clf)
+#### 🧠 Example: XGBoost Training per Speaker & Age
 
+train_test_xgboost and xgboost_load_data_compute_f1score_for_speaker_age functions handle  
+speaker-specific training and evaluation with F1-score computation.
+
+```python
+from your_script import xgboost_load_data_compute_f1score_for_speaker_age
+
+train_csv = "/path/to/train_data.csv"
+test_csv  = "/path/to/test_data.csv"
+feature_columns = ["F1", "F2", "ΔF1", "ΔF2", "MFCC1", "MFCC2", ...]  # replace with actual feature names
+label_column = "vowel_label"
+
+results_df = xgboost_load_data_compute_f1score_for_speaker_age(
+    train_csv_file_path=train_csv,
+    test_csv_file_path=test_csv,
+    feature_column_names=feature_columns,
+    label_column_name=label_column
+)
+
+print(results_df.head())
+#### 🧩 Example: CNN + Optuna Hyperparameter Optimization
+
+`cnn_load_data_compute_f1score_for_speaker_age` trains a small 1-D CNN  
+for each speaker and age group, optimizing hyperparameters using **Optuna**.
+
+from your_script import cnn_load_data_compute_f1score_for_speaker_age  
+
+train_csv = "/path/to/train_data.csv"  
+test_csv  = "/path/to/test_data.csv"  
+feature_columns = ["F1", "F2", "ΔF1", "ΔF2", "MFCC1", "MFCC2", ...]  
+label_column = "vowel_label"  
+kernel_sizes = [2, 2]  
+
+results_df = cnn_load_data_compute_f1score_for_speaker_age(  
+  train_csv_file_path=train_csv,  
+  test_csv_file_path=test_csv,  
+  feature_column_names=feature_columns,  
+  label_column_name=label_column,  
+  kernel_sizes=kernel_sizes  
+)  
+
+print(results_df)  
+
+---
+
+**Both functions output a DataFrame with columns like:**  
+
+- **spkid** – Speaker ID  
+- **AgeMonth** – Age of the speaker (in months)  
+- **#train_samples** – Number of samples used for training  
+- **F1_Score** – Macro-averaged F1 score on the test data  
 ---
 ```
 ## 📁 Data Notes
