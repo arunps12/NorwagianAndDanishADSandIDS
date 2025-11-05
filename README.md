@@ -72,7 +72,7 @@ rmarkdown::render("Six_vowels_statistical_analysis_Norwegian_Danish_IDS_ADS_data
 1. Set data paths in `paths.py`  
 2. Extract features using the relevant feature extraction scripts  
 3. Train or evaluate models with:
-
+```bash
 from model import train_model, evaluate  
 from utils import load_dataset  
 
@@ -81,7 +81,7 @@ clf = train_model(X_train, y_train)
 evaluate(clf)
 
 ---
-
+```
 ## 📁 Data Notes
 
 - Raw audio and annotation data are **not included** in the repository.  
