@@ -40,8 +40,10 @@ conda activate ads_ids
 
 # Install dependencies
 pip install numpy scipy pandas scikit-learn matplotlib librosa soundfile jupyter
-
-# 2️⃣ R Environment Setup
+---
+```
+### 2️⃣ R Environment Setup
+```bash
 
 Install the core R packages for statistical modeling:
 
