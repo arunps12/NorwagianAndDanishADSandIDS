@@ -21,11 +21,11 @@ This repository includes:
 The project examines how **vowel space expansion** and **within-category variability** in IDS may enhance vowel learning and generalization.  
 Analyses include:
 
-- Comparison of vowel space area across **registers (ADS vs. IDS)**  
-- Age-related effects and cross-linguistic comparisons (**Norwegian vs. Danish**)  
+- Comparison of vowel space area across within-category variability **registers (ADS vs. IDS)**  
+- Cross-linguistic comparisons (**Norwegian vs. Danish**)  
 - Machine learning-based classification of vowels using **formant** and **MFCC** features  
 
-These findings contribute to understanding how speech addressed to infants supports **phonetic category learning** and **word recognition**.
+These findings contribute to understanding how speech addressed to infants supports **phonetic category learning** .
 
 ---
 
