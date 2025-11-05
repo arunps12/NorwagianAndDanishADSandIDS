@@ -40,7 +40,7 @@ conda activate ads_ids
 
 # Install dependencies
 pip install numpy scipy pandas scikit-learn matplotlib librosa soundfile jupyter
-## 2️⃣ R Environment Setup
+### 2️⃣ R Environment Setup
 
 Install the core R packages for statistical modeling:
 
@@ -55,7 +55,7 @@ Run the R Markdown analyses directly from RStudio or the terminal:
 rmarkdown::render("Six_vowels_statistical_analysis_Norwegian_Danish_IDS_ADS_data.Rmd")
 
 ---
-
+```
 ## 🧪 Typical Workflows
 
 ### 🔹 Vowel-Space Statistical Analysis (R)
